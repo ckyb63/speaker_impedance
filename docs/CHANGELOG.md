@@ -4,11 +4,13 @@
 
 ### Added
 
-- Added Temperature and Humidity to the data collection process as well as the GUI.
+- Added Temperature, Humidity, and Pressure to the data collection process as well as the GUI.
+- Added new Arduino code for reporting specifically the Temperature, Humidity, and Pressure sensor.
 
 ### Changed
 
 - Measurement unit details in the GUI.
+- Arduino Code files organized in a folder.
 
 ## [0.1.1] 25 Feb, 2025
 

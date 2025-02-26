@@ -29,14 +29,28 @@ class DataCollectionApp(QtWidgets.QWidget):
         # Initialize serial communication
         self.serial_port = None  # Initialize to None first
         try:
-            self.serial_port = serial.Serial('COM3', 9600, timeout=1)  # Adjust COM port as necessary
+            self.serial_port = serial.Serial('COM8', 115200, timeout=1)  # Adjust COM port as necessary
         except serial.SerialException:
             pass  # Do nothing, we'll handle it later
 
-        # Layouts
-        self.main_layout = QtWidgets.QHBoxLayout(self)
-        self.button_layout = QtWidgets.QVBoxLayout()
+        # Main layout
+        self.main_layout = QtWidgets.QHBoxLayout(self)  # Change to horizontal layout
+
+        # Create a vertical layout for input fields
         self.input_layout = QtWidgets.QVBoxLayout()
+
+        # Create a frame for the button at the top
+        self.button_frame = QtWidgets.QFrame()
+        self.button_layout = QtWidgets.QHBoxLayout(self.button_frame)
+
+        # Start Button
+        self.start_button = QtWidgets.QPushButton("Start Data Collection")
+        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
+        self.start_button.clicked.connect(self.start_data_collection)
+        self.button_layout.addWidget(self.start_button)
+
+        # Add button frame to the input layout
+        self.input_layout.addWidget(self.button_frame)
 
         # Dropdown for earphone selection
         self.types = ["A", "B", "C", "D"]
@@ -81,35 +95,37 @@ class DataCollectionApp(QtWidgets.QWidget):
         self.input_layout.addWidget(QtWidgets.QLabel("Status:"))
         self.input_layout.addWidget(self.progress_text)
 
-        # Add fields for temperature and humidity
+        # Create a horizontal layout for temperature, humidity, and pressure
+        self.readings_layout = QtWidgets.QHBoxLayout()
+
+        # Add fields for temperature, humidity, and pressure
         self.humidity_label = QtWidgets.QLabel("Humidity (%):")
         self.humidity_value = QtWidgets.QLabel("N/A")  # Placeholder for humidity value
-        self.input_layout.addWidget(self.humidity_label)
-        self.input_layout.addWidget(self.humidity_value)
+        self.readings_layout.addWidget(self.humidity_label)
+        self.readings_layout.addWidget(self.humidity_value)
 
         self.temperature_label = QtWidgets.QLabel("Temperature (°C):")
         self.temperature_value = QtWidgets.QLabel("N/A")  # Placeholder for temperature value
-        self.input_layout.addWidget(self.temperature_label)
-        self.input_layout.addWidget(self.temperature_value)
+        self.readings_layout.addWidget(self.temperature_label)
+        self.readings_layout.addWidget(self.temperature_value)
 
-        # Start Button
-        self.start_button = QtWidgets.QPushButton("Start Data Collection")
-        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
-        self.start_button.clicked.connect(self.start_data_collection)
-        self.button_layout.addWidget(self.start_button)
+        self.pressure_label = QtWidgets.QLabel("Pressure (hPa):")
+        self.pressure_value = QtWidgets.QLabel("N/A")  # Placeholder for pressure value
+        self.readings_layout.addWidget(self.pressure_label)
+        self.readings_layout.addWidget(self.pressure_value)
+
+        # Add the readings layout to the input layout
+        self.input_layout.addLayout(self.readings_layout)
 
         # Add input layout to the main layout
-        self.main_layout.addLayout(self.input_layout)
-
-        # Add the button layout to the input layout
-        self.input_layout.addLayout(self.button_layout)
+        self.main_layout.addLayout(self.input_layout, stretch=1)  # Allow input layout to take less space
 
         # Create initial plot
         self.fig, self.ax = plt.subplots()
         self.canvas = FigureCanvas(self.fig)
 
         # Add the plot to the right side of the main layout
-        self.main_layout.addWidget(self.canvas)
+        self.main_layout.addWidget(self.canvas, stretch=2)  # Allow the canvas to take more space
 
         # Set the title of the plot
         self.ax.set_title('Impedance Magnitude |Z| vs Frequency')
@@ -121,7 +137,11 @@ class DataCollectionApp(QtWidgets.QWidget):
         if self.serial_port:
             self.update_progress("Arduino connected.")
         else:
-            self.update_progress("Warning: Arduino not connected. Data collection will not include temperature and humidity.")
+            self.update_progress("Warning: Arduino not connected. Data collection will not include temperature, humidity, and pressure.")
+
+        # Timer for reading Arduino data
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self.read_arduino_data)  # Connect the timer to the read function
 
     def load_dwf(self):
         if sys.platform.startswith("win"):
@@ -165,16 +185,21 @@ class DataCollectionApp(QtWidgets.QWidget):
 
         self.start_button.setStyleSheet("background-color: red; color: black; font-size: 24px;")
 
+        # Start the timer to read Arduino data every second
+        self.timer.start(1000)  # Adjust the interval as needed (1000 ms = 1 second)
+
     def read_arduino_data(self):
         if self.serial_port and self.serial_port.in_waiting > 0:
             line = self.serial_port.readline().decode('utf-8').rstrip()
             try:
-                temperature, humidity = map(float, line.split(','))  # Expecting "temp,humidity" format
+                # Expecting "temp,humidity,pressure" format
+                temperature, humidity, pressure = map(float, line.split(','))
                 self.temperature_value.setText(f"{temperature:.2f}")
                 self.humidity_value.setText(f"{humidity:.2f}")
-                return temperature, humidity
+                self.pressure_value.setText(f"{pressure:.2f}")
+                return temperature, humidity, pressure
             except ValueError:
-                print("Invalid data from Arduino")
+                print("Invalid data from Arduino: ", line)  # Log the invalid data for debugging
 
     def collect_data(self, folder_name, repetitions, start_freq, stop_freq, reference, steps):
         # Opens the device, Analog Discovery 2 through the serial port.
@@ -198,11 +223,6 @@ class DataCollectionApp(QtWidgets.QWidget):
         self.start_button.setText("Running")
 
         for run in range(repetitions):
-            # Read temperature and humidity from Arduino
-            temperature, humidity = (None, None)
-            if self.serial_port:
-                temperature, humidity = self.read_arduino_data()
-
             self.dwf.FDwfAnalogImpedanceReset(hdwf)
             self.dwf.FDwfAnalogImpedanceModeSet(hdwf, c_int(0))
             self.dwf.FDwfAnalogImpedanceReferenceSet(hdwf, c_double(reference))
@@ -219,7 +239,7 @@ class DataCollectionApp(QtWidgets.QWidget):
             file_path = os.path.join(self.base_folder, f"{folder_name}_Run{run + 1}.csv")
             with open(file_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                writer.writerow(["Frequency (Hz)", "Trace Rs (Ohm)", "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)"])
+                writer.writerow(["Frequency (Hz)", "Trace Rs (Ohm)", "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)", "Pressure (hPa)"])
 
                 for i in range(steps):
                     hz = start + i * (stop - start) / (steps - 1)
@@ -242,7 +262,7 @@ class DataCollectionApp(QtWidgets.QWidget):
                     rgXs[i] = reactance.value
                     rgZ[i] = (resistance.value**2 + reactance.value**2)**0.5
 
-                    writer.writerow([hz, rgRs[i], rgXs[i], temperature, humidity])
+                    writer.writerow([hz, rgRs[i], rgXs[i], self.temperature_value.text(), self.humidity_value.text(), self.pressure_value.text()])
                     self.update_progress(f"Run {run + 1}, Step {i + 1}/{steps}: Frequency {hz:.2f} Hz, Impedance {rgZ[i]:.2f} Ohms")
 
             self.update_plot(rgHz, rgZ)
@@ -250,6 +270,9 @@ class DataCollectionApp(QtWidgets.QWidget):
 
         self.dwf.FDwfAnalogImpedanceConfigure(hdwf, c_int(0))
         self.dwf.FDwfDeviceClose(hdwf)
+
+        # Stop the timer after data collection is complete
+        self.timer.stop()
         self.update_progress("Data collection completed.")
         self.start_button.setText("Start Data Collection")
         self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
