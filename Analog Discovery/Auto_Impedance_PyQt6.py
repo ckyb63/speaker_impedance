@@ -11,7 +11,6 @@ Using the API from the DIGILENT WaveForms software, this is a custom script to d
 import os
 import sys
 import time
-import math
 import csv
 import threading
 from ctypes import *
@@ -19,12 +18,20 @@ from dwfconstants import *
 from PyQt6 import QtWidgets, QtCore
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import serial
 
 class DataCollectionApp(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Earphones Impedance Data Collector")
         self.setGeometry(100, 100, 1200, 800)
+
+        # Initialize serial communication
+        self.serial_port = None  # Initialize to None first
+        try:
+            self.serial_port = serial.Serial('COM3', 9600, timeout=1)  # Adjust COM port as necessary
+        except serial.SerialException:
+            pass  # Do nothing, we'll handle it later
 
         # Layouts
         self.main_layout = QtWidgets.QHBoxLayout(self)
@@ -42,7 +49,7 @@ class DataCollectionApp(QtWidgets.QWidget):
         self.lengths = [str(i) for i in range(5, 31, 3)] + [str(i) for i in [9, 24, 39]] + ["Open", "Blocked"]
         self.length_combo = QtWidgets.QComboBox()
         self.length_combo.addItems(self.lengths)
-        self.input_layout.addWidget(QtWidgets.QLabel("Length:"))
+        self.input_layout.addWidget(QtWidgets.QLabel("Length (mm):"))
         self.input_layout.addWidget(self.length_combo)
 
         # Entry for number of repetitions
@@ -53,9 +60,9 @@ class DataCollectionApp(QtWidgets.QWidget):
         # Frequency entries
         self.start_frequency_entry = QtWidgets.QLineEdit("20")
         self.stop_frequency_entry = QtWidgets.QLineEdit("20000")
-        self.input_layout.addWidget(QtWidgets.QLabel("Start Frequency:"))
+        self.input_layout.addWidget(QtWidgets.QLabel("Start Frequency (Hz):"))
         self.input_layout.addWidget(self.start_frequency_entry)
-        self.input_layout.addWidget(QtWidgets.QLabel("Stop Frequency:"))
+        self.input_layout.addWidget(QtWidgets.QLabel("Stop Frequency (Hz):"))
         self.input_layout.addWidget(self.stop_frequency_entry)
 
         # Reference resistor value
@@ -73,6 +80,17 @@ class DataCollectionApp(QtWidgets.QWidget):
         self.progress_text.setReadOnly(True)
         self.input_layout.addWidget(QtWidgets.QLabel("Status:"))
         self.input_layout.addWidget(self.progress_text)
+
+        # Add fields for temperature and humidity
+        self.humidity_label = QtWidgets.QLabel("Humidity (%):")
+        self.humidity_value = QtWidgets.QLabel("N/A")  # Placeholder for humidity value
+        self.input_layout.addWidget(self.humidity_label)
+        self.input_layout.addWidget(self.humidity_value)
+
+        self.temperature_label = QtWidgets.QLabel("Temperature (°C):")
+        self.temperature_value = QtWidgets.QLabel("N/A")  # Placeholder for temperature value
+        self.input_layout.addWidget(self.temperature_label)
+        self.input_layout.addWidget(self.temperature_value)
 
         # Start Button
         self.start_button = QtWidgets.QPushButton("Start Data Collection")
@@ -98,6 +116,12 @@ class DataCollectionApp(QtWidgets.QWidget):
 
         # Load DWF library
         self.load_dwf()
+
+        # Update progress based on Arduino connection status
+        if self.serial_port:
+            self.update_progress("Arduino connected.")
+        else:
+            self.update_progress("Warning: Arduino not connected. Data collection will not include temperature and humidity.")
 
     def load_dwf(self):
         if sys.platform.startswith("win"):
@@ -141,6 +165,17 @@ class DataCollectionApp(QtWidgets.QWidget):
 
         self.start_button.setStyleSheet("background-color: red; color: black; font-size: 24px;")
 
+    def read_arduino_data(self):
+        if self.serial_port and self.serial_port.in_waiting > 0:
+            line = self.serial_port.readline().decode('utf-8').rstrip()
+            try:
+                temperature, humidity = map(float, line.split(','))  # Expecting "temp,humidity" format
+                self.temperature_value.setText(f"{temperature:.2f}")
+                self.humidity_value.setText(f"{humidity:.2f}")
+                return temperature, humidity
+            except ValueError:
+                print("Invalid data from Arduino")
+
     def collect_data(self, folder_name, repetitions, start_freq, stop_freq, reference, steps):
         # Opens the device, Analog Discovery 2 through the serial port.
         hdwf = c_int()
@@ -163,6 +198,11 @@ class DataCollectionApp(QtWidgets.QWidget):
         self.start_button.setText("Running")
 
         for run in range(repetitions):
+            # Read temperature and humidity from Arduino
+            temperature, humidity = (None, None)
+            if self.serial_port:
+                temperature, humidity = self.read_arduino_data()
+
             self.dwf.FDwfAnalogImpedanceReset(hdwf)
             self.dwf.FDwfAnalogImpedanceModeSet(hdwf, c_int(0))
             self.dwf.FDwfAnalogImpedanceReferenceSet(hdwf, c_double(reference))
@@ -179,7 +219,7 @@ class DataCollectionApp(QtWidgets.QWidget):
             file_path = os.path.join(self.base_folder, f"{folder_name}_Run{run + 1}.csv")
             with open(file_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                writer.writerow(["Frequency (Hz)", "Trace Rs (Ohm)", "Trace Xs (Ohm)"])
+                writer.writerow(["Frequency (Hz)", "Trace Rs (Ohm)", "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)"])
 
                 for i in range(steps):
                     hz = start + i * (stop - start) / (steps - 1)
@@ -202,7 +242,7 @@ class DataCollectionApp(QtWidgets.QWidget):
                     rgXs[i] = reactance.value
                     rgZ[i] = (resistance.value**2 + reactance.value**2)**0.5
 
-                    writer.writerow([hz, rgRs[i], rgXs[i]])
+                    writer.writerow([hz, rgRs[i], rgXs[i], temperature, humidity])
                     self.update_progress(f"Run {run + 1}, Step {i + 1}/{steps}: Frequency {hz:.2f} Hz, Impedance {rgZ[i]:.2f} Ohms")
 
             self.update_plot(rgHz, rgZ)
@@ -228,6 +268,11 @@ class DataCollectionApp(QtWidgets.QWidget):
         self.ax.set_title('Impedance Magnitude |Z| vs Frequency')
         self.ax.legend()
         self.canvas.draw()
+
+    def closeEvent(self, event):
+        if self.serial_port:
+            self.serial_port.close()  # Close the serial port when the application is closed
+        event.accept()
 
 # Main function that starts the program
 if __name__ == "__main__":
