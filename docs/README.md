@@ -10,8 +10,10 @@
 
 This repository contains the code and data for the speaker impedance project. There are 3 main parts to the project:
 
-1. **Analog Discovery 2** - This is the device that is used to measure the speaker impedance, and the Auto Impedance Collection V1.1.py script is used to automate the process of collecting the speaker impedance data through the Analog Discovery 2, a new GUI was developed with PyQt6.
+1. **Analog Discovery** - This is the device that is used to measure the speaker impedance, and the Auto Impedance Collection V1.1.py script is used to automate the process of collecting the speaker impedance data through the Analog Discovery 2, a new GUI was developed with PyQt6.
 
-2. **Tympan** - This is the script that adapted code from the Tympan library to reproduce the impedance measurement process from the Analog Discovery 2 to using a Tympan.
+2. **Tympan** - Working with the Tympan library, this module is developed to allow the impedance measurement process to be done on a Tympan with the audio hat.
 
-3. **Arduino Nano 33** - This code is being developed for part three of the project, the arduino is used to read the temperature and the humidity of the enclosure for testing the speaker impedance.
+3. **Arduino** - This code is being developed for part three of the project, the arduino is used to read the temperature and the humidity of the enclosure for testing the speaker impedance. Which then reports the data to the serial monitor allowing for displaying in the GUI as well as recorded into the csv files.
+
+4. **Model** - This is the AI model being developed to predict the speaker impedance from the temperature and the humidity of the enclosure.
