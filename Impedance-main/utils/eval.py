@@ -29,5 +29,5 @@ def draw_heatmap(X_test, y_test, model, label_encoder):
     plt.title("Confusion Matrix")
     
     #plt.show()
-    plt.savefig("outputs/confusion_matrix.png")
+    plt.savefig("Impedance-main/outputs/confusion_matrix.png")
     plt.close()

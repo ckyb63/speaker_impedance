@@ -5,7 +5,7 @@ LOSS_FN = "categorical_crossentropy"
 OPTIMIZER = "adam" # "sgd" to "adam"
 TEST_BATCH = 128
 DROP_RATE = 0.2 # 0.5 to 0.2
-OUTPUT_PATH = "./outputs/"
+OUTPUT_PATH = "Impedance-main/outputs/"
 
 def get_config():
     config = {
