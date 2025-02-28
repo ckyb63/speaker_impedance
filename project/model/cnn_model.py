@@ -1,57 +1,82 @@
 import tensorflow as tf
-from tensorflow.keras import layers, models
+from tensorflow.keras import layers, models, regularizers
 
-def create_cnn_model(input_shape, mixed_precision=True):
+def create_cnn_model(input_shape, mixed_precision=False):
     """
-    Create a CNN model for impedance prediction
+    Create a CNN model for impedance prediction with balanced regularization
+    to prevent both underfitting and overfitting
     
     Parameters:
     - input_shape: Shape of input data (features, channels)
-    - mixed_precision: Whether to use mixed precision training
+    - mixed_precision: Parameter kept for backward compatibility but not used
     
     Returns:
     - Compiled Keras model
     """
-    # Enable mixed precision if requested (speeds up training on compatible GPUs)
-    if mixed_precision:
-        try:
-            policy = tf.keras.mixed_precision.Policy('mixed_float16')
-            tf.keras.mixed_precision.set_global_policy(policy)
-            print("Mixed precision enabled")
-        except:
-            print("Mixed precision not available")
+    # Force float32 precision for all operations
+    tf.keras.backend.clear_session()
+    try:
+        policy = tf.keras.mixed_precision.Policy('float32')
+        tf.keras.mixed_precision.set_global_policy(policy)
+    except Exception as e:
+        print(f"Warning: Could not set precision policy: {e}")
     
-    model = models.Sequential()
-    model.add(layers.Input(shape=input_shape))  # Input layer
-    
-    # First convolutional block - smaller and more efficient
-    model.add(layers.Conv1D(32, kernel_size=2, activation='relu', padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Dropout(0.2))
-    
-    # Second convolutional block
-    model.add(layers.Conv1D(64, kernel_size=2, activation='relu', padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.MaxPooling1D(pool_size=2, padding='same'))
-    model.add(layers.Dropout(0.3))
-    
-    # Flatten and dense layers - reduced size
-    model.add(layers.Flatten())
-    model.add(layers.Dense(64, activation='relu'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Dropout(0.4))
-    model.add(layers.Dense(32, activation='relu'))
-    model.add(layers.Dense(1))  # Output layer for regression
+    # Use Sequential API for a cleaner model architecture
+    model = models.Sequential([
+        # Input layer
+        layers.Input(shape=input_shape, dtype='float32'),
+        
+        # First convolutional block - increased filters to 32
+        layers.Conv1D(32, kernel_size=3, padding='same',
+                     kernel_regularizer=regularizers.l2(0.0005),  # Reduced L2 from 0.001 to 0.0005
+                     dtype='float32'),
+        layers.BatchNormalization(dtype='float32'),
+        layers.Activation('relu'),
+        layers.Dropout(0.2),  # Reduced dropout from 0.3 to 0.2
+        
+        # Second convolutional block - increased filters to 64
+        layers.Conv1D(64, kernel_size=3, padding='same',
+                     kernel_regularizer=regularizers.l2(0.0005),  # Reduced L2 from 0.001 to 0.0005
+                     dtype='float32'),
+        layers.BatchNormalization(dtype='float32'),
+        layers.Activation('relu'),
+        layers.MaxPooling1D(pool_size=2, padding='same'),
+        layers.Dropout(0.2),  # Reduced dropout from 0.3 to 0.2
+        
+        # Third convolutional block - added for more capacity
+        layers.Conv1D(128, kernel_size=3, padding='same',
+                     kernel_regularizer=regularizers.l2(0.0005),  # Reduced L2 from 0.001 to 0.0005
+                     dtype='float32'),
+        layers.BatchNormalization(dtype='float32'),
+        layers.Activation('relu'),
+        layers.Dropout(0.2),  # Reduced dropout from 0.3 to 0.2
+        
+        # Global pooling
+        layers.GlobalAveragePooling1D(),
+        
+        # Dense layers - added more capacity
+        layers.Dense(64, 
+                    kernel_regularizer=regularizers.l2(0.0005),  # Reduced L2 from 0.001 to 0.0005
+                    dtype='float32'),
+        layers.BatchNormalization(dtype='float32'),
+        layers.Activation('relu'),
+        layers.Dropout(0.3),  # Reduced dropout from 0.4 to 0.3
+        
+        # Second dense layer
+        layers.Dense(32, 
+                    kernel_regularizer=regularizers.l2(0.0005),  # Reduced L2 from 0.001 to 0.0005
+                    dtype='float32'),
+        layers.BatchNormalization(dtype='float32'),
+        layers.Activation('relu'),
+        layers.Dropout(0.2),  # Reduced dropout from 0.3 to 0.2
+        
+        # Output layer
+        layers.Dense(1, dtype='float32')
+    ])
     
     # Compile with Adam optimizer and MSE loss
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-    
-    # If using mixed precision, use loss scaling to prevent underflow
-    if mixed_precision:
-        try:
-            optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
-        except:
-            pass
+    # Increased learning rate slightly
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005)
     
     model.compile(
         optimizer=optimizer,

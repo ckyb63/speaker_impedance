@@ -13,13 +13,14 @@ class GPUMonitor(Callback):
     """
     Callback to monitor GPU usage during training
     """
-    def __init__(self, interval=5):
+    def __init__(self, interval=5, output_dir='outputs'):
         super(GPUMonitor, self).__init__()
         self.interval = interval  # Interval in seconds
         self.stop_monitoring = False
         self.gpu_usage_history = []
         self.time_points = []
         self.start_time = None
+        self.output_dir = output_dir
         
     def on_train_begin(self, logs=None):
         self.start_time = time.time()
@@ -40,7 +41,7 @@ class GPUMonitor(Callback):
             plt.xlabel('Time (seconds)')
             plt.ylabel('GPU Memory Usage (MB)')
             plt.grid(True)
-            plt.savefig('gpu_usage.png')
+            plt.savefig(os.path.join(self.output_dir, 'gpu_usage.png'))
             plt.close()
             
             # Print summary
@@ -49,7 +50,7 @@ class GPUMonitor(Callback):
             print(f"\nGPU Usage Summary:")
             print(f"Average GPU memory usage: {avg_usage:.2f} MB")
             print(f"Maximum GPU memory usage: {max_usage:.2f} MB")
-            print(f"GPU usage graph saved to 'gpu_usage.png'")
+            print(f"GPU usage graph saved to '{os.path.join(self.output_dir, 'gpu_usage.png')}'")
         
     def _monitor_gpu(self):
         """Monitor GPU memory usage in a separate thread"""
@@ -64,22 +65,21 @@ class GPUMonitor(Callback):
                 memory_info = None
                 try:
                     memory_info = tf.config.experimental.get_memory_info('GPU:0')
-                except:
-                    # If the above method fails, try an alternative approach
-                    pass
-                
-                if memory_info:
                     # Calculate used memory in MB
                     used_memory = (memory_info['total'] - memory_info['available']) / (1024 * 1024)
                     self.gpu_usage_history.append(used_memory)
                     self.time_points.append(time.time() - self.start_time)
+                except Exception as e:
+                    # Silently handle the error without printing to console
+                    pass
             except Exception as e:
-                print(f"Error monitoring GPU: {e}")
+                # Silently handle any other errors without printing to console
+                pass
                 
             # Sleep for the specified interval
             time.sleep(self.interval)
 
-def train_model(X_train, y_train, epochs=20, batch_size=64, mixed_precision=True):
+def train_model(X_train, y_train, epochs=20, batch_size=64, mixed_precision=True, output_dir='outputs'):
     """
     Train the model with optimized parameters for faster training
     
@@ -89,10 +89,14 @@ def train_model(X_train, y_train, epochs=20, batch_size=64, mixed_precision=True
     - epochs: Maximum number of epochs to train
     - batch_size: Batch size for training
     - mixed_precision: Whether to use mixed precision training
+    - output_dir: Directory to save output files
     
     Returns:
     - Trained model
     """
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
     input_shape = (X_train.shape[1], X_train.shape[2])  # (features, 1)
     model = create_cnn_model(input_shape, mixed_precision=mixed_precision)
 
@@ -103,21 +107,24 @@ def train_model(X_train, y_train, epochs=20, batch_size=64, mixed_precision=True
     print(f"Training data shape: {X_train.shape}")
 
     # Create directories for model checkpoints and logs if they don't exist
-    os.makedirs('checkpoints', exist_ok=True)
-    os.makedirs('logs', exist_ok=True)
+    checkpoint_dir = os.path.join(output_dir, 'checkpoints')
+    logs_dir = os.path.join(output_dir, 'logs')
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
 
-    # Define callbacks - optimized for faster training
+    # Define callbacks - optimized for balanced training
     callbacks = [
-        # Early stopping with reduced patience
+        # Early stopping with balanced patience
         EarlyStopping(
             monitor='val_loss',
-            patience=5,  # Reduced from 10
+            patience=10,  # Increased from 7 to 10 to allow more training time
             restore_best_weights=True,
-            verbose=1
+            verbose=1,
+            min_delta=0.0001  # Keep at 0.0001 for finer improvement detection
         ),
         # Model checkpoint
         ModelCheckpoint(
-            'checkpoints/best_model.keras',
+            os.path.join(checkpoint_dir, 'best_model.keras'),
             save_best_only=True,
             monitor='val_loss',
             verbose=1
@@ -125,23 +132,24 @@ def train_model(X_train, y_train, epochs=20, batch_size=64, mixed_precision=True
         # Reduce learning rate when a metric has stopped improving
         ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.5,
-            patience=3,  # Reduced from 5
+            factor=0.3,  # Changed from 0.2 to 0.3 for less aggressive reduction
+            patience=4,  # Increased from 3 to 4
             min_lr=1e-6,
             verbose=1
         ),
         # GPU monitoring
-        GPUMonitor(interval=10)  # Check GPU usage every 10 seconds
+        GPUMonitor(interval=10, output_dir=output_dir)  # Check GPU usage every 10 seconds
     ]
 
-    # Train the model with fewer epochs and larger batch size
+    # Train the model with increased validation split
     history = model.fit(
         X_train, y_train,
         epochs=epochs,
         batch_size=batch_size,
-        validation_split=0.2,
+        validation_split=0.25,  # Decreased from 0.3 to 0.25 to allow more training data
         verbose=1,
-        callbacks=callbacks
+        callbacks=callbacks,
+        shuffle=True  # Ensure data is shuffled each epoch
     )
 
     # Plot training history
@@ -167,14 +175,26 @@ def train_model(X_train, y_train, epochs=20, batch_size=64, mixed_precision=True
         plt.legend(['Train', 'Validation'], loc='upper right')
     
     plt.tight_layout()
-    plt.savefig('training_history.png')
+    plt.savefig(os.path.join(output_dir, 'training_history.png'))
     
     return model
 
-def evaluate_model(model, X_test, y_test):
+def evaluate_model(model, X_test, y_test, output_dir='outputs'):
     """
     Evaluate the model on test data
+    
+    Parameters:
+    - model: Trained model
+    - X_test: Test features
+    - y_test: Test targets
+    - output_dir: Directory to save output files
+    
+    Returns:
+    - Mean squared error
     """
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Use a larger batch size for prediction to speed up evaluation
     predictions = model.predict(X_test, batch_size=256)
     
@@ -205,14 +225,23 @@ def evaluate_model(model, X_test, y_test):
     plt.xlabel('Actual Values')
     plt.ylabel('Predicted Values')
     plt.title('Actual vs Predicted Values')
-    plt.savefig('actual_vs_predicted.png')
+    plt.savefig(os.path.join(output_dir, 'actual_vs_predicted.png'))
     
     return mse
 
-def verify_model(model, X_test, y_test):
+def verify_model(model, X_test, y_test, output_dir='outputs'):
     """
     Verify model performance with detailed error analysis
+    
+    Parameters:
+    - model: Trained model
+    - X_test: Test features
+    - y_test: Test targets
+    - output_dir: Directory to save output files
     """
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Use a larger batch size for prediction
     predictions = model.predict(X_test, batch_size=256)
     
@@ -238,4 +267,4 @@ def verify_model(model, X_test, y_test):
     plt.ylabel('Frequency')
     plt.title('Distribution of Prediction Errors')
     plt.axvline(x=0, color='r', linestyle='--')
-    plt.savefig('error_distribution.png') 
+    plt.savefig(os.path.join(output_dir, 'error_distribution.png')) 

@@ -27,4 +27,7 @@ def draw_heatmap(X_test, y_test, model, label_encoder):
     plt.xlabel("Predicted label")
     plt.ylabel("True label")
     plt.title("Confusion Matrix")
-    plt.show()
+    
+    #plt.show()
+    plt.savefig("outputs/confusion_matrix.png")
+    plt.close()

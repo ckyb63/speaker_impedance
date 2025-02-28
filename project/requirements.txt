@@ -6,9 +6,7 @@ seaborn>=0.11.2
 
 # Machine learning libraries
 scikit-learn>=1.0.0
-tensorflow==2.17.0  # Updated to be compatible with CUDA 12.8
-# For GPU support (optional)
-# tensorflow-gpu is now included in the main tensorflow package
+tensorflow==tensorflow[and-cuda]
 
 # Utilities
 tqdm>=4.62.0 

@@ -1,5 +1,5 @@
 MODEL = "DNet" # later to "CNet"
-EPOCH = 100
+EPOCH = 150
 BATCH_SIZE = 32
 LOSS_FN = "categorical_crossentropy"
 OPTIMIZER = "adam" # "sgd" to "adam"

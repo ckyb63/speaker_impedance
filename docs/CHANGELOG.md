@@ -1,5 +1,10 @@
 # Latest
 
+## [0.1.3] 27 Feb, 2025
+
+- Entire New Impedance model training. 
+- Modified the impedance model written by Keisuke.
+
 ## [0.1.2] 26 Feb, 2025
 
 ### Added

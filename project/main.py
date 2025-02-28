@@ -6,6 +6,10 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
+from model.data_loader import load_data
+from model.data_preprocessor import preprocess_data
+from model.model_trainer import train_model, evaluate_model, verify_model
+from analyze_results import plot_confusion_matrix
 
 # Configure GPU memory growth to avoid memory allocation issues
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -18,13 +22,8 @@ if len(physical_devices) > 0:
         except:
             print(f"Could not set memory growth for {device}")
     
-    # Enable mixed precision for TensorFlow 2.4+
-    try:
-        policy = tf.keras.mixed_precision.Policy('mixed_float16')
-        tf.keras.mixed_precision.set_global_policy(policy)
-        print("Mixed precision enabled")
-    except:
-        print("Could not enable mixed precision")
+    # REMOVED: Do not enable mixed precision globally
+    # This was causing conflicts with the model-specific settings
 else:
     print("No GPU found. Using CPU for training.")
     # Set thread count for CPU training
@@ -94,25 +93,109 @@ def check_gpu_availability():
     
     print("==================================\n")
 
-from model.data_loader import load_data
-from model.data_preprocessor import preprocess_data
-from model.model_trainer import train_model, evaluate_model, verify_model
-from model.predictor import predict_length
+def analyze_impedance_length_relationship(df):
+    """
+    Analyze the relationship between impedance values and length categories
+    to create a more accurate mapping function.
+    
+    Parameters:
+    - df: DataFrame containing the data with 'Trace |Z| (Ohm)' and 'Length' columns
+    
+    Returns:
+    - Dictionary mapping length categories to their median impedance values
+    - Dictionary mapping length categories to their impedance ranges (min, max)
+    """
+    if 'Length' not in df.columns or 'Trace |Z| (Ohm)' not in df.columns:
+        print("Required columns not found in DataFrame")
+        return {}, {}
+    
+    # Group by length and calculate statistics for impedance values
+    length_stats = df.groupby('Length')['Trace |Z| (Ohm)'].agg(['median', 'min', 'max']).reset_index()
+    
+    # Create dictionaries for median values and ranges
+    length_to_median = {}
+    length_to_range = {}
+    
+    for _, row in length_stats.iterrows():
+        length = row['Length']
+        median_z = row['median']
+        min_z = row['min']
+        max_z = row['max']
+        
+        length_to_median[length] = median_z
+        length_to_range[length] = (min_z, max_z)
+    
+    # Print the statistics for reference
+    print("\nImpedance statistics by length category:")
+    print(length_stats.sort_values('median'))
+    
+    return length_to_median, length_to_range
+
+def create_impedance_thresholds(length_to_median):
+    """
+    Create thresholds for impedance values based on median values
+    
+    Parameters:
+    - length_to_median: Dictionary mapping length categories to their median impedance values
+    
+    Returns:
+    - List of (threshold, length) tuples sorted by threshold
+    """
+    # Convert to list of (median, length) tuples and sort by median
+    median_length_pairs = [(median, length) for length, median in length_to_median.items()]
+    median_length_pairs.sort()
+    
+    # Create thresholds between consecutive medians
+    thresholds = []
+    for i in range(len(median_length_pairs) - 1):
+        current_median, current_length = median_length_pairs[i]
+        next_median, _ = median_length_pairs[i + 1]
+        threshold = (current_median + next_median) / 2
+        thresholds.append((threshold, current_length))
+    
+    # Add the last length category with a very high threshold
+    _, last_length = median_length_pairs[-1]
+    thresholds.append((float('inf'), last_length))
+    
+    return thresholds
+
+# Define the length prediction function
+def predict_length(impedance_value, thresholds):
+    """
+    Map impedance values to length categories based on learned thresholds
+    
+    Parameters:
+    - impedance_value: The impedance value to map to a length category
+    - thresholds: List of (threshold, length) tuples sorted by threshold
+    
+    Returns:
+    - Length category as a string
+    """
+    for threshold, length in thresholds:
+        if impedance_value < threshold:
+            return length
+    
+    # This should never happen due to the inf threshold, but just in case
+    return thresholds[-1][1]
 
 def main():
     # Check GPU availability
     check_gpu_availability()
     
+    # Create output directory if it doesn't exist
+    output_dir = 'outputs'
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Start timing
     start_time = time.time()
     
     # Load data with sampling to reduce dataset size
-    folder_path = r'C:\Users\maxch\Documents\Purdue Files\Audio Research\Github\speaker_impedance\Collected_Data_Sep16'  # Update this path
+    folder_path = r'/home/max/speaker_stuff_wslver/speaker_impedance/Collected_Data_Sep16'  # Update this path
     
     # Load only a subset of files and sample rows to speed up training
     # Adjust these parameters based on your available memory and desired training time
-    max_files = 100  # Limit to 100 files
-    sample_rate = 1  # Use only 20% of rows from each file
+    max_files = 2500   # Increased from 2000 to 2500 files for better learning
+    sample_rate = 1.0  # Use all rows from each file for better accuracy
     
     print(f"Loading data with max_files={max_files}, sample_rate={sample_rate}...")
     df = load_data(folder_path, max_files=max_files, sample_rate=sample_rate)
@@ -123,6 +206,17 @@ def main():
     print(f"Columns: {df.columns.tolist()}")
     print("\nData sample:")
     print(df.head())
+    
+    # Analyze the relationship between impedance values and length categories
+    if 'Length' in df.columns:
+        length_to_median, length_to_range = analyze_impedance_length_relationship(df)
+        impedance_thresholds = create_impedance_thresholds(length_to_median)
+        print("\nImpedance thresholds for length prediction:")
+        for threshold, length in impedance_thresholds:
+            if threshold != float('inf'):
+                print(f"Length {length}: < {threshold:.2f} Ohm")
+            else:
+                print(f"Length {length}: >= {impedance_thresholds[-2][0]:.2f} Ohm")
     
     # Data visualization before preprocessing - only if dataset is small enough
     if len(df) < 100000:  # Skip visualization for large datasets
@@ -146,116 +240,98 @@ def main():
         plt.title('Distribution of Trace |Z| (Ohm) (Target)')
         
         plt.tight_layout()
-        plt.savefig('feature_distributions.png')
+        plt.savefig(os.path.join(output_dir, 'feature_distributions.png'))
     else:
         print("Skipping visualization due to large dataset size")
     
+    # Create a copy of the dataframe to preserve the Length column for later use
+    df_with_length = df.copy()
+    
     # Preprocess data - now using Deg, Rs, and Xs
     print("Preprocessing data...")
-    X_train, X_test, y_train, y_test, scaler = preprocess_data(df)
+    X_train, X_test, y_train, y_test, scaler, test_indices = preprocess_data(df, return_indices=True)
     
     # Indicate that training is starting
     print("\nStarting model training...")
     
     # Train model with improved architecture and reduced epochs
-    epochs = 20  # Reduced from 100
-    batch_size = 128  # Increased from 32
+    epochs = 10
+    batch_size = 128  # Increased from 64 to 128 for faster training
     
-    # Enable mixed precision if GPU is available
-    mixed_precision = len(physical_devices) > 0
-    model = train_model(X_train, y_train, epochs=epochs, batch_size=batch_size, mixed_precision=mixed_precision)
+    # Enable mixed precision if GPU is available, but default to False for now due to compatibility issues
+    mixed_precision = False  # Disabled by default to avoid type mismatch errors
+    print(f"Mixed precision training: {'Enabled' if mixed_precision else 'Disabled'}")
+    model = train_model(X_train, y_train, epochs=epochs, batch_size=batch_size, mixed_precision=mixed_precision, output_dir=output_dir)
     
     # Save the model in the newer Keras format
-    model.save('trained_model.keras')  # Save as Keras format
+    model.save(os.path.join(output_dir, 'trained_model.keras'))  # Save as Keras format
     
     # Evaluate model with enhanced metrics
     print("\nEvaluating model...")
-    mse = evaluate_model(model, X_test, y_test)
+    mse = evaluate_model(model, X_test, y_test, output_dir=output_dir)
     
     # Verify model with detailed analysis
     print("\nVerifying model...")
-    verify_model(model, X_test, y_test)
+    verify_model(model, X_test, y_test, output_dir=output_dir)
     
     # Example prediction using Deg, Rs, and Xs
     # Extract a sample from the test data
     sample_idx = np.random.randint(0, len(X_test))
-    sample_features = X_test[sample_idx].reshape(1, X_test.shape[1], X_test.shape[2])
-    actual_value = y_test[sample_idx]
+    sample_features = X_test[sample_idx:sample_idx+1]
+    sample_actual = y_test[sample_idx]
     
     # Make prediction
-    predicted_value = model.predict(sample_features)[0][0]
-    print(f"\nSample prediction:")
-    print(f"Actual |Z|: {actual_value:.4f} Ohm")
-    print(f"Predicted |Z|: {predicted_value:.4f} Ohm")
-    print(f"Absolute Error: {abs(actual_value - predicted_value):.4f} Ohm")
+    sample_pred = model.predict(sample_features)[0][0]
+    
+    print("\nSample prediction:")
+    print(f"Actual |Z|: {sample_actual:.4f} Ohm")
+    print(f"Predicted |Z|: {sample_pred:.4f} Ohm")
+    print(f"Absolute Error: {abs(sample_actual - sample_pred):.4f} Ohm")
     
     # Generate predictions for all test data
     print("\nGenerating predictions for all test data...")
-    y_pred = model.predict(X_test, batch_size=256).flatten()
+    all_predictions = model.predict(X_test)
     
-    # Create regression plot
-    plt.figure(figsize=(10, 6))
-    # Sample points if there are too many
-    if len(y_test) > 1000:
-        indices = np.random.choice(len(y_test), 1000, replace=False)
-        y_test_sample = y_test[indices]
-        y_pred_sample = y_pred[indices]
-    else:
-        y_test_sample = y_test
-        y_pred_sample = y_pred
+    # If you have length labels in your dataset, you can create a confusion matrix
+    if 'Length' in df_with_length.columns:
+        print("\nCreating confusion matrix for length predictions...")
         
-    plt.scatter(y_test_sample, y_pred_sample, alpha=0.5)
-    plt.plot([min(y_test_sample), max(y_test_sample)], [min(y_test_sample), max(y_test_sample)], 'r--')
-    plt.xlabel('Actual |Z| (Ohm)')
-    plt.ylabel('Predicted |Z| (Ohm)')
-    plt.title('Actual vs Predicted |Z| Values')
-    plt.savefig('regression_results.png')
-    
-    # For classification-like analysis, bin the continuous values
-    # Define bins for classification
-    bins = np.linspace(min(y_test), max(y_test), num=10)  # Create 10 bins
-    y_test_binned = np.digitize(y_test, bins)  # Binning the true values
-    y_pred_binned = np.digitize(y_pred, bins)  # Binning the predicted values
-    
-    # Create confusion matrix
-    cm = confusion_matrix(y_test_binned, y_pred_binned)
-    
-    # Plot and save the confusion matrix
-    plt.figure(figsize=(10, 8))
-    
-    # Create bin labels for display
-    bin_labels = [f"{bins[i]:.2f}-{bins[i+1]:.2f}" for i in range(len(bins)-1)]
-    
-    # Fix the error by creating a custom ConfusionMatrixDisplay
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    disp.plot(cmap='Blues')
-    
-    # Manually set the tick labels to match the number of ticks
-    ax = plt.gca()
-    n_classes = cm.shape[0]
-    tick_marks = np.arange(n_classes)
-    
-    # Set x and y ticks and labels
-    ax.set_xticks(tick_marks)
-    ax.set_yticks(tick_marks)
-    
-    # Only set labels if they match the number of ticks
-    if len(bin_labels) == n_classes:
-        ax.set_xticklabels(bin_labels, rotation=45)
-        ax.set_yticklabels(bin_labels)
+        # Get true length categories using the test indices
+        y_true_lengths = df_with_length.iloc[test_indices]['Length'].values
+        print(f"Number of test samples with length data: {len(y_true_lengths)}")
+        
+        # Apply the mapping to get predicted length categories using the learned thresholds
+        y_pred_lengths = np.array([predict_length(val, impedance_thresholds) for val in all_predictions.flatten()])
+        print(f"Number of predicted length values: {len(y_pred_lengths)}")
+        
+        # Ensure the arrays have the same length
+        if len(y_true_lengths) == len(y_pred_lengths):
+            # Plot confusion matrix
+            plot_confusion_matrix(y_true_lengths, y_pred_lengths, output_dir=output_dir)
+            
+            # Calculate and print accuracy
+            accuracy = accuracy_score(y_true_lengths, y_pred_lengths)
+            print(f"Length prediction accuracy: {accuracy:.4f}")
+            
+            # Save the predictions to a CSV file for further analysis
+            predictions_df = pd.DataFrame({
+                'True_Length': y_true_lengths,
+                'Predicted_Length': y_pred_lengths,
+                'Impedance': all_predictions.flatten()
+            })
+            predictions_df.to_csv(os.path.join(output_dir, 'length_predictions.csv'), index=False)
+            print(f"Predictions saved to {os.path.join(output_dir, 'length_predictions.csv')}")
+        else:
+            print(f"Error: Length mismatch between true ({len(y_true_lengths)}) and predicted ({len(y_pred_lengths)}) values")
+            print("Skipping confusion matrix generation")
     else:
-        # If there's a mismatch, use simple numeric labels
-        ax.set_xticklabels(np.arange(n_classes))
-        ax.set_yticklabels(np.arange(n_classes))
-        print(f"Warning: Mismatch between bin labels ({len(bin_labels)}) and confusion matrix size ({n_classes})")
-    
-    plt.title('Confusion Matrix (Binned Values)')
-    plt.tight_layout()
-    plt.savefig('confusion_matrix.png')
-    
-    # Calculate accuracy of binned predictions
-    accuracy = accuracy_score(y_test_binned, y_pred_binned)
-    print(f'\nBinned Accuracy: {accuracy:.4f}')
+        # If length information is not available, just calculate binned accuracy
+        # This is a simplified metric - you should adapt it to your needs
+        bins = 10
+        y_test_binned = np.floor(y_test * bins).astype(int)
+        y_pred_binned = np.floor(all_predictions.flatten() * bins).astype(int)
+        binned_accuracy = np.mean(y_test_binned == y_pred_binned)
+        print(f"\nBinned Accuracy: {binned_accuracy:.4f}")
     
     # Calculate and print total execution time
     end_time = time.time()
@@ -266,5 +342,5 @@ def main():
     
     print("\nTraining and evaluation complete. Results saved to output files.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main() 

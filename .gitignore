@@ -9,5 +9,10 @@ __pycache__
 *.csv
 *.json
 
-#/impedance-main
-#/Collected_Data_Sep16
+/Collected_Data_Sep16
+/myenv
+
+*.png
+*.keras
+*.h5
+*.csv

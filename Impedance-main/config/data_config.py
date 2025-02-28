@@ -1,9 +1,9 @@
 import os
 
-DATA_PATH = r"C:\Users\maxch\Documents\Purdue Files\Audio Research\Github\speaker_impedance\Collected_Data_Sep16" # path to datafile (new: Collected_Data, old: Complete Data)
+DATA_PATH = r"/home/max/speaker_stuff_wslver/speaker_impedance/Collected_Data_Sep16" # path to datafile (new: Collected_Data, old: Complete Data)
 SPEAKERS = ["A", "B", "C", "D"] # options: "A", "B", "C", "D"
 SPEAKER_DIF = False # whether to differentiate speakers
-COLUMN = ["PH", "MAG"] # options: "FREQ", "PH", "MAG", "RS", "XS", "REC"
+COLUMN = ["PH", "MAG", "RS", "XS", "REC"] # options: "FREQ", "PH", "MAG", "RS", "XS", "REC"
 VAL = 0.2 # validation split ratio
 TEST = 0.2 # test split ratio
 START = 0 # starting index
