@@ -4,15 +4,20 @@ This application combines impedance measurement using the Analog Discovery 2 wit
 
 ## Features
 
+### Streamlined Workflow
+- Single-screen interface with measurement and prediction panels side by side
+- Automatic prediction immediately after measurement completion
+- Simplified interface focused on quick, single measurements
+
 ### Measurement Capabilities
 - Configure measurement parameters (frequency range, steps, reference resistor)
 - Select earphone type and length for data organization
 - Display real-time environmental data (temperature, humidity, pressure) from Arduino
-- Visualize impedance measurements in real-time with a log-log plot
 - Save measurement data to CSV files
 
 ### Prediction Capabilities
-- Load existing CSV files or use freshly measured data
+- Automatic prediction after measurement
+- Load existing CSV files for prediction
 - Select model type (DNet or CNet)
 - Enable/disable speaker differentiation
 - Display prediction results with confidence scores
@@ -21,7 +26,6 @@ This application combines impedance measurement using the Analog Discovery 2 wit
 
 - Python 3.6+
 - PyQt6
-- matplotlib
 - numpy
 - pandas
 - keras
@@ -34,7 +38,7 @@ This application combines impedance measurement using the Analog Discovery 2 wit
 
 1. Install the required Python packages:
    ```
-   pip install pyqt6 matplotlib numpy pandas keras tensorflow scikit-learn pyserial
+   pip install pyqt6 numpy pandas keras tensorflow scikit-learn pyserial
    ```
 
 2. Install the WaveForms SDK from Digilent: https://digilent.com/reference/software/waveforms/waveforms-3/start
@@ -43,23 +47,22 @@ This application combines impedance measurement using the Analog Discovery 2 wit
 
 ## Usage
 
-### For Measurements:
+### Quick Start:
 
 1. Connect your Analog Discovery 2 device to your computer
 2. (Optional) Connect an Arduino with environmental sensors to COM8 (or modify the code for your COM port)
 3. Select the earphone type and length from the dropdown menus
 4. Configure the frequency range, steps, and reference resistor value
 5. Click "Start Measurement" to begin the impedance measurement
-6. The application will display the measurement progress and plot the impedance curve
+6. After the measurement completes, the application will automatically predict the length
+7. The prediction result and confidence will be displayed in the right panel
 
-### For Predictions:
+### Using Existing CSV Files:
 
-1. After a measurement is complete, the application will automatically switch to the prediction tab
-2. Alternatively, you can load an existing CSV file by clicking "Load CSV File"
-3. Select the model type (DNet or CNet) based on your trained model
-4. Check "Enable Speaker Differentiation" if your model was trained with speaker differentiation
-5. Click "Predict Length" to get the prediction result
-6. The application will display the predicted length and confidence score
+1. Click "Load CSV File" to select a previously saved CSV file
+2. Select the model type (DNet or CNet) based on your trained model
+3. Check "Enable Speaker Differentiation" if your model was trained with speaker differentiation
+4. Click "Predict Length" to get the prediction result
 
 ## Model Files
 
@@ -67,7 +70,7 @@ The application looks for model files in the following locations:
 1. First, it checks the local `Model` directory for `.keras` or `.h5` files
 2. If no model is found, it falls back to `../Impedance-main/best_model.keras`
 
-You can also manually select a model file using the "Browse" button in the Prediction tab.
+You can also manually select a model file using the "Browse" button in the Prediction panel.
 
 ## Data Storage
 

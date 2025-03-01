@@ -1,10 +1,10 @@
 MODEL = "DNet" # later to "CNet"
-EPOCH = 150
+EPOCH = 200
 BATCH_SIZE = 32
 LOSS_FN = "categorical_crossentropy"
 OPTIMIZER = "adam" # "sgd" to "adam"
 TEST_BATCH = 128
-DROP_RATE = 0.2 # 0.5 to 0.2
+DROP_RATE = 0.2
 OUTPUT_PATH = "Impedance-main/outputs/"
 
 def get_config():

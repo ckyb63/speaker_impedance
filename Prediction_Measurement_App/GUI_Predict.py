@@ -1,11 +1,10 @@
 """
-Name: Impedance Measurement and Length Prediction GUI
+Name: Impedance Measurement GUI
 Author: Max Chen
 Date: March 1, 2024
 Description: 
-This is a GUI application that combines impedance measurement using the Analog Discovery 2
-with length prediction using a trained neural network model. The application allows users
-to perform impedance measurements and then predict the length of the earphone tube.
+This is a GUI application for impedance measurement using the Analog Discovery 2.
+This version is intended for predicting earphone length from a measurement taken.
 """
 
 # Import necessary libraries
@@ -17,11 +16,7 @@ import threading
 import numpy as np
 from ctypes import *
 from PyQt6 import QtWidgets, QtCore
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import serial
-from keras.models import load_model
-from sklearn.preprocessing import LabelEncoder
 
 # Add parent directory to path to import dwfconstants
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -32,52 +27,33 @@ from dwfconstants import *
 class ImpedancePredictionApp(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Earphones Impedance Measurement and Length Prediction")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setWindowTitle("Earphones Impedance Measurement")
+        self.setGeometry(100, 100, 800, 600)  # Reduced size since we're removing the plot
 
+        # Main layout (vertical)
+        self.main_layout = QtWidgets.QVBoxLayout(self)
+        
+        # Create a horizontal layout for the main content
+        self.content_layout = QtWidgets.QHBoxLayout()
+        
+        # Progress text box at the bottom - CREATE THIS FIRST so update_progress works
+        self.progress_text = QtWidgets.QTextEdit()
+        self.progress_text.setReadOnly(True)
+        self.progress_text.setMaximumHeight(150)
+        self.main_layout.addWidget(QtWidgets.QLabel("Status:"))
+        self.main_layout.addWidget(self.progress_text)
+        
         # Initialize serial communication for Arduino (temperature, humidity, pressure)
         self.serial_port = None
         try:
             self.serial_port = serial.Serial('COM8', 115200, timeout=1)  # Adjust COM port as necessary
+            self.update_progress("Arduino connected.")
         except serial.SerialException:
-            pass  # We'll handle it later
-
-        # Main layout (horizontal)
-        self.main_layout = QtWidgets.QHBoxLayout(self)
-
-        # Create left panel for controls
-        self.left_panel = QtWidgets.QVBoxLayout()
+            self.update_progress("Warning: Arduino not connected. Data collection will not include temperature, humidity, and pressure.")
         
-        # Create tabs for measurement and prediction
-        self.tabs = QtWidgets.QTabWidget()
-        self.measurement_tab = QtWidgets.QWidget()
-        self.prediction_tab = QtWidgets.QWidget()
-        
-        self.tabs.addTab(self.measurement_tab, "Measurement")
-        self.tabs.addTab(self.prediction_tab, "Prediction")
-        
-        # Setup measurement tab
-        self.setup_measurement_tab()
-        
-        # Setup prediction tab
-        self.setup_prediction_tab()
-        
-        # Add tabs to left panel
-        self.left_panel.addWidget(self.tabs)
-        
-        # Add left panel to main layout
-        self.main_layout.addLayout(self.left_panel, stretch=1)
-        
-        # Create right panel for plots
-        self.right_panel = QtWidgets.QVBoxLayout()
-        
-        # Create initial plot
-        self.fig, self.ax = plt.subplots()
-        self.canvas = FigureCanvas(self.fig)
-        self.right_panel.addWidget(self.canvas)
-        
-        # Add right panel to main layout
-        self.main_layout.addLayout(self.right_panel, stretch=2)
+        # Create left panel for measurement controls
+        self.measurement_panel = QtWidgets.QVBoxLayout()
+        self.setup_measurement_panel()
         
         # Load DWF library
         self.load_dwf()
@@ -89,55 +65,34 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
         self.resistance = None
         self.reactance = None
         
-        # Update progress based on Arduino connection status
-        if self.serial_port:
-            self.update_progress("Arduino connected.")
-        else:
-            self.update_progress("Warning: Arduino not connected. Data collection will not include temperature, humidity, and pressure.")
-        
         # Timer for reading Arduino data
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.read_arduino_data)
         
-        # Load model
-        self.model = None
+        # Create the prediction panel (UI only, no functionality)
+        self.prediction_panel = QtWidgets.QVBoxLayout()
+        self.setup_prediction_panel()
         
-        # Look for model in the local Model directory first
-        model_dir = os.path.join(current_dir, "Model")
-        if os.path.exists(model_dir):
-            # Find the first .keras or .h5 file in the Model directory
-            model_files = [f for f in os.listdir(model_dir) if f.endswith(('.keras', '.h5'))]
-            if model_files:
-                self.model_path = os.path.join(model_dir, model_files[0])
-                self.update_progress(f"Found model in local Model directory: {model_files[0]}")
-            else:
-                # Fallback to the model in the parent directory
-                self.model_path = os.path.join(parent_dir, "Impedance-main", "best_model.keras")
-                self.update_progress("No model found in local Model directory. Using default path.")
-        else:
-            # Fallback to the model in the parent directory
-            self.model_path = os.path.join(parent_dir, "Impedance-main", "best_model.keras")
-            self.update_progress("Model directory not found. Using default path.")
+        # Add panels to content layout
+        self.content_layout.addLayout(self.measurement_panel)
+        self.content_layout.addLayout(self.prediction_panel)
         
-        # Try to load the model
-        if os.path.exists(self.model_path):
-            try:
-                self.model = load_model(self.model_path)
-                self.update_progress(f"Model loaded from {self.model_path}")
-            except Exception as e:
-                self.update_progress(f"Error loading model: {str(e)}")
-        else:
-            self.update_progress(f"Model not found at {self.model_path}")
+        # Add content layout to main layout - MOVE THIS AFTER creating the progress_text
+        self.main_layout.insertLayout(0, self.content_layout)
 
-    def setup_measurement_tab(self):
-        # Create layout for measurement tab
-        self.measurement_layout = QtWidgets.QVBoxLayout(self.measurement_tab)
+    def setup_measurement_panel(self):
+        # Create a group box for measurement settings
+        self.measurement_group = QtWidgets.QGroupBox("Measurement Settings")
+        self.measurement_layout = QtWidgets.QVBoxLayout(self.measurement_group)
         
         # Start Button
         self.start_button = QtWidgets.QPushButton("Start Measurement")
-        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
+        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 18px;")
         self.start_button.clicked.connect(self.start_measurement)
         self.measurement_layout.addWidget(self.start_button)
+        
+        # Add some spacing after the start button
+        self.measurement_layout.addSpacing(5)
         
         # Dropdown for earphone selection
         self.types = ["A", "B", "C", "D"]
@@ -193,36 +148,61 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
         # Add the readings layout to the measurement layout
         self.measurement_layout.addLayout(self.readings_layout)
         
-        # Progress text box
-        self.progress_text = QtWidgets.QTextEdit()
-        self.progress_text.setReadOnly(True)
-        self.measurement_layout.addWidget(QtWidgets.QLabel("Status:"))
-        self.measurement_layout.addWidget(self.progress_text)
-
-    def setup_prediction_tab(self):
-        # Create layout for prediction tab
-        self.prediction_layout = QtWidgets.QVBoxLayout(self.prediction_tab)
+        # Add more spacing to match the height of the prediction panels
+        self.measurement_layout.addSpacing(30)
         
-        # Predict button
-        self.predict_button = QtWidgets.QPushButton("Predict Length")
-        self.predict_button.setStyleSheet("background-color: blue; color: white; font-size: 24px;")
-        self.predict_button.clicked.connect(self.predict_length)
-        self.prediction_layout.addWidget(self.predict_button)
+        # Add a "Last Measurement" section
+        self.last_measurement_label = QtWidgets.QLabel("Last Measurement:")
+        self.last_measurement_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.measurement_layout.addWidget(self.last_measurement_label)
+        
+        # Add a label to display the last measurement file path
+        self.last_measurement_path = QtWidgets.QLabel("No measurement taken yet")
+        self.last_measurement_path.setWordWrap(True)
+        self.last_measurement_path.setMinimumHeight(40)
+        self.measurement_layout.addWidget(self.last_measurement_path)
+        
+        # Add some spacing
+        self.measurement_layout.addSpacing(10)
+        
+        # Add a "Ready for measurement" status label at the bottom
+        self.measurement_status = QtWidgets.QLabel("Ready for measurement")
+        self.measurement_status.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
+        self.measurement_status.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.measurement_layout.addWidget(self.measurement_status)
+        
+        # Add the group box to the panel
+        self.measurement_panel.addWidget(self.measurement_group)
+        
+        # Add a spacer to push everything to the top
+        self.measurement_panel.addStretch()
+
+    def setup_prediction_panel(self):
+        # Create a group box for prediction settings (UI only)
+        self.prediction_group = QtWidgets.QGroupBox("Prediction Settings (UI Only)")
+        self.prediction_layout = QtWidgets.QVBoxLayout(self.prediction_group)
         
         # Load CSV button
         self.load_csv_button = QtWidgets.QPushButton("Load CSV File")
+        self.load_csv_button.setStyleSheet("font-size: 14px;")
         self.load_csv_button.clicked.connect(self.load_csv_file)
         self.prediction_layout.addWidget(self.load_csv_button)
         
+        # Add some spacing
+        self.prediction_layout.addSpacing(5)
+        
         # Model selection
-        self.model_path_entry = QtWidgets.QLineEdit(self.model_path if hasattr(self, 'model_path') else "")
         self.prediction_layout.addWidget(QtWidgets.QLabel("Model Path:"))
+        self.model_path_entry = QtWidgets.QLineEdit("")
         self.prediction_layout.addWidget(self.model_path_entry)
         
         # Browse button for model
         self.browse_model_button = QtWidgets.QPushButton("Browse")
-        self.browse_model_button.clicked.connect(self.browse_model)
+        self.browse_model_button.clicked.connect(self.browse_model_placeholder)
         self.prediction_layout.addWidget(self.browse_model_button)
+        
+        # Add some spacing
+        self.prediction_layout.addSpacing(5)
         
         # Model type selection
         self.model_types = ["DNet", "CNet"]
@@ -233,25 +213,59 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
         
         # Speaker differentiation checkbox
         self.speaker_diff_checkbox = QtWidgets.QCheckBox("Enable Speaker Differentiation")
+        self.speaker_diff_checkbox.setChecked(False)
         self.prediction_layout.addWidget(self.speaker_diff_checkbox)
         
+        # Add the group box to the panel
+        self.prediction_panel.addWidget(self.prediction_group)
+        
+        # Create a group box for prediction results
+        self.results_group = QtWidgets.QGroupBox("Prediction Results (UI Only)")
+        self.results_layout = QtWidgets.QVBoxLayout(self.results_group)
+        
         # Prediction results
-        self.prediction_layout.addWidget(QtWidgets.QLabel("Prediction Results:"))
         self.prediction_result_label = QtWidgets.QLabel("No prediction yet")
-        self.prediction_result_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        self.prediction_layout.addWidget(self.prediction_result_label)
+        self.prediction_result_label.setStyleSheet("font-size: 24px; font-weight: bold;")
+        self.prediction_result_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.results_layout.addWidget(self.prediction_result_label)
         
         # Confidence label
         self.confidence_label = QtWidgets.QLabel("Confidence: N/A")
-        self.prediction_layout.addWidget(self.confidence_label)
+        self.confidence_label.setStyleSheet("font-size: 16px;")
+        self.confidence_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.results_layout.addWidget(self.confidence_label)
         
-        # CSV file path label
+        # Add some spacing
+        self.results_layout.addSpacing(10)
+        
+        # CSV file path label with word wrap enabled
+        self.results_layout.addWidget(QtWidgets.QLabel("CSV File:"))
         self.csv_path_label = QtWidgets.QLabel("No CSV file loaded")
-        self.prediction_layout.addWidget(QtWidgets.QLabel("CSV File:"))
-        self.prediction_layout.addWidget(self.csv_path_label)
+        self.csv_path_label.setWordWrap(True)  # Enable word wrap
+        self.csv_path_label.setMaximumWidth(350)  # Set maximum width to force wrapping
+        self.csv_path_label.setMinimumHeight(40)  # Set minimum height to ensure space for wrapped text
+        self.results_layout.addWidget(self.csv_path_label)
         
-        # Add spacer to push everything to the top
-        self.prediction_layout.addStretch()
+        # Add some spacing
+        self.results_layout.addSpacing(10)
+        
+        # Manual predict button
+        self.predict_button = QtWidgets.QPushButton("Predict Length")
+        self.predict_button.setStyleSheet("background-color: blue; color: white; font-size: 16px;")
+        self.predict_button.clicked.connect(self.predict_length_placeholder)
+        self.results_layout.addWidget(self.predict_button)
+        
+        # Add a prediction status label
+        self.prediction_status = QtWidgets.QLabel("Ready for prediction")
+        self.prediction_status.setStyleSheet("font-size: 14px; font-weight: bold; color: blue;")
+        self.prediction_status.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.results_layout.addWidget(self.prediction_status)
+        
+        # Add the results group to the panel
+        self.prediction_panel.addWidget(self.results_group)
+        
+        # Add a spacer to push everything to the top
+        self.prediction_panel.addStretch()
 
     def load_dwf(self):
         if sys.platform.startswith("win"):
@@ -274,6 +288,10 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Error", "Please select type and length.")
             return
         
+        # Update measurement status
+        self.measurement_status.setText("Measurement in progress...")
+        self.measurement_status.setStyleSheet("font-size: 14px; font-weight: bold; color: red;")
+        
         # Folder selection and creation
         folder_name = f"{selected_type}_{selected_length}"
         self.base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Collected_Data", folder_name)
@@ -284,7 +302,7 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
         thread = threading.Thread(target=self.collect_data, args=(folder_name, start_freq, stop_freq, reference, steps))
         thread.start()
         
-        self.start_button.setStyleSheet("background-color: red; color: black; font-size: 24px;")
+        self.start_button.setStyleSheet("background-color: red; color: black; font-size: 18px;")
         self.start_button.setText("Running")
         
         # Start the timer to read Arduino data every second
@@ -371,11 +389,11 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
         self.reactance = rgXs
         self.csv_path = file_path
         
-        # Update the plot
-        self.update_plot(rgHz, rgZ)
-        
         # Update the CSV path label
         self.csv_path_label.setText(file_path)
+        
+        # Update the last measurement path
+        self.last_measurement_path.setText(file_path)
         
         self.dwf.FDwfAnalogImpedanceConfigure(hdwf, c_int(0))
         self.dwf.FDwfDeviceClose(hdwf)
@@ -384,25 +402,15 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
         self.timer.stop()
         self.update_progress("Measurement completed.")
         self.start_button.setText("Start Measurement")
-        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
+        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 18px;")
         
-        # Switch to prediction tab
-        self.tabs.setCurrentIndex(1)
+        # Update measurement status
+        self.measurement_status.setText("Measurement completed")
+        self.measurement_status.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
 
     def update_progress(self, message):
         self.progress_text.append(message)
         self.progress_text.verticalScrollBar().setValue(self.progress_text.verticalScrollBar().maximum())
-
-    def update_plot(self, frequencies, impedance):
-        self.ax.clear()
-        self.ax.plot(frequencies, impedance, label='|Z| (Ohms)')
-        self.ax.set_xscale('log')
-        self.ax.set_yscale('log')
-        self.ax.set_xlabel('Frequency (Hz)')
-        self.ax.set_ylabel('Impedance (Ohms)')
-        self.ax.set_title('Impedance Magnitude |Z| vs Frequency')
-        self.ax.legend()
-        self.canvas.draw()
 
     def load_csv_file(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv)")
@@ -410,160 +418,25 @@ class ImpedancePredictionApp(QtWidgets.QWidget):
             self.csv_path = file_path
             self.csv_path_label.setText(file_path)
             self.update_progress(f"CSV file loaded: {file_path}")
+            
+            # Update prediction status
+            self.prediction_status.setText("CSV loaded - Ready for prediction")
+            self.prediction_status.setStyleSheet("font-size: 14px; font-weight: bold; color: blue;")
 
-    def browse_model(self):
+    # Placeholder methods for prediction functionality (to be implemented later)
+    def browse_model_placeholder(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open Model File", "", "Keras Models (*.keras *.h5)")
         if file_path:
             self.model_path_entry.setText(file_path)
-            try:
-                self.model = load_model(file_path)
-                self.update_progress(f"Model loaded: {file_path}")
-            except Exception as e:
-                self.update_progress(f"Error loading model: {str(e)}")
+            self.update_progress(f"Model path set to: {file_path} (functionality not implemented)")
 
-    def min_max(self, col):
-        """Normalize column using min-max scaling"""
-        return (col - min(col)) / (max(col) - min(col))
-
-    def preprocess_csv(self, file_path, columns=None, start=0, end=500):
-        """Preprocess a CSV file for prediction"""
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"CSV file not found: {file_path}")
+    def predict_length_placeholder(self):
+        self.update_progress("Prediction functionality has been removed and will be implemented later.")
+        QtWidgets.QMessageBox.information(self, "Not Implemented", "The prediction functionality has been removed and will be implemented later.")
         
-        # Default columns if not specified
-        if columns is None:
-            columns = ["PH", "MAG", "RS", "XS", "REC"]
-        
-        # Read CSV file
-        import pandas as pd
-        data = pd.read_csv(file_path, header=0)
-        
-        # Extract and preprocess columns
-        processed_cols = []
-        for col in columns:
-            col = col.upper()
-            if col == "FREQ":
-                freq = self.min_max(data.iloc[:, 0][start:end+1])
-                processed_cols.append(freq)
-            elif col == "PH":
-                # Calculate phase from Rs and Xs
-                rs = data.iloc[:, 1][start:end+1]
-                xs = data.iloc[:, 2][start:end+1]
-                phase = np.arctan2(xs, rs)
-                phase = self.min_max(phase)
-                processed_cols.append(phase)
-            elif col == "MAG":
-                # Calculate magnitude from Rs and Xs
-                rs = data.iloc[:, 1][start:end+1]
-                xs = data.iloc[:, 2][start:end+1]
-                mag = np.sqrt(rs**2 + xs**2)
-                mag = self.min_max(mag)
-                processed_cols.append(mag)
-            elif col == "RS":
-                rs = self.min_max(data.iloc[:, 1][start:end+1])
-                processed_cols.append(rs)
-            elif col == "XS":
-                xs = self.min_max(data.iloc[:, 2][start:end+1])
-                processed_cols.append(xs)
-            elif col == "REC":
-                rs = self.min_max(data.iloc[:, 1][start:end+1])
-                xs = self.min_max(data.iloc[:, 2][start:end+1])
-                rec = rs + 1j * xs
-                processed_cols.append(rec)
-        
-        # Reshape for model input
-        input_data = np.array([processed_cols])
-        
-        return input_data
-
-    def create_label_encoder(self, speakers=None, lengths=None, speaker_differentiation=False):
-        """Create and fit a label encoder for the model output"""
-        # Default values if not specified
-        if speakers is None:
-            speakers = ["A", "B", "C", "D"]
-        if lengths is None:
-            lengths = ["5", "8", "9", "11", "14", "17", "20", "23", "24", "26", "29", "39", "Blocked", "Open"]
-        
-        # Create labels
-        labels = []
-        for speaker in speakers:
-            for length in lengths:
-                # Format the length to match the model's output format
-                if length in ["5", "8", "9"]:
-                    length = "0" + length
-                if length == "Blocked":
-                    length = "00" + length
-                    
-                # Create the label
-                if speaker_differentiation:
-                    label = f"{speaker}_{length}"
-                else:
-                    label = length
-                    
-                labels.append(label)
-        
-        # Create and fit the label encoder
-        label_encoder = LabelEncoder()
-        label_encoder.fit(labels)
-        
-        return label_encoder
-
-    def predict_length(self):
-        if not hasattr(self, 'csv_path') or not self.csv_path:
-            QtWidgets.QMessageBox.critical(self, "Error", "No CSV file loaded. Please load a CSV file or perform a measurement first.")
-            return
-        
-        # Get model path from entry
-        model_path = self.model_path_entry.text()
-        
-        # Check if model exists
-        if not os.path.exists(model_path):
-            QtWidgets.QMessageBox.critical(self, "Error", f"Model file not found: {model_path}")
-            return
-        
-        # Load model if not already loaded
-        if self.model is None:
-            try:
-                self.model = load_model(model_path)
-            except Exception as e:
-                QtWidgets.QMessageBox.critical(self, "Error", f"Error loading model: {str(e)}")
-                return
-        
-        # Get model type
-        model_type = self.model_type_combo.currentText()
-        
-        # Get speaker differentiation setting
-        speaker_diff = self.speaker_diff_checkbox.isChecked()
-        
-        try:
-            # Preprocess the CSV file
-            columns = ["PH", "MAG", "RS", "XS", "REC"]
-            input_data = self.preprocess_csv(self.csv_path, columns)
-            
-            # Reshape for CNet if needed
-            if model_type == "CNet":
-                input_data = input_data[:, np.newaxis, :]
-            
-            # Get the label encoder
-            label_encoder = self.create_label_encoder(speaker_differentiation=speaker_diff)
-            
-            # Make prediction
-            prediction = self.model.predict(input_data)
-            predicted_class_index = np.argmax(prediction, axis=1)[0]
-            predicted_class = label_encoder.inverse_transform([predicted_class_index])[0]
-            
-            # Get prediction probability
-            prediction_probability = np.max(prediction, axis=1)[0]
-            
-            # Update the prediction result label
-            self.prediction_result_label.setText(f"Predicted Length: {predicted_class}")
-            self.confidence_label.setText(f"Confidence: {prediction_probability:.4f}")
-            
-            self.update_progress(f"Prediction: {predicted_class} with confidence {prediction_probability:.4f}")
-            
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Error during prediction: {str(e)}")
-            self.update_progress(f"Error during prediction: {str(e)}")
+        # Update prediction status
+        self.prediction_status.setText("Prediction not implemented")
+        self.prediction_status.setStyleSheet("font-size: 14px; font-weight: bold; color: orange;")
 
     def closeEvent(self, event):
         if self.serial_port:
