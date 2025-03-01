@@ -15,7 +15,7 @@ import csv
 import threading
 from ctypes import *
 from dwfconstants import *
-from PyQt6 import QtWidgets, QtCore
+from PyQt6 import QtWidgets, QtCore, QtGui
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import serial
@@ -24,111 +24,317 @@ class DataCollectionApp(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Earphones Impedance Data Collector")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1200, 600)
+        
+        # Create and set the application icon
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "speaker_icon.png")
+        if not os.path.exists(os.path.dirname(icon_path)):
+            os.makedirs(os.path.dirname(icon_path))
+            
+        # Create a simple speaker icon if it doesn't exist
+        if not os.path.exists(icon_path):
+            self.create_speaker_icon(icon_path)
+            
+        app_icon = QtGui.QIcon(icon_path)
+        self.setWindowIcon(app_icon)
+        QtWidgets.QApplication.setWindowIcon(app_icon)
+        
+        # Set dark background for the entire application
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #ffffff;
+                margin: 0px;
+                padding: 0px;
+            }
+            QGroupBox {
+                border: 2px solid #3d3d3d;
+                border-radius: 5px;
+                margin-top: 1ex;
+                color: #ffffff;
+                padding-top: 8px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 3px;
+                color: #ffffff;
+            }
+            QLineEdit {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                padding: 3px;
+                margin: 0px;
+                max-height: 24px;
+            }
+            QComboBox {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                padding: 3px;
+                margin: 0px;
+                max-height: 24px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-width: 0px;
+            }
+            QTextEdit {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                padding: 3px;
+                max-height: 100px;
+            }
+        """)
 
         # Initialize serial communication
-        self.serial_port = None  # Initialize to None first
+        self.serial_port = None
         try:
-            self.serial_port = serial.Serial('COM8', 115200, timeout=1)  # Adjust COM port as necessary
+            self.serial_port = serial.Serial('COM8', 115200, timeout=1)
         except serial.SerialException:
-            pass  # Do nothing, we'll handle it later
+            pass
 
         # Main layout
-        self.main_layout = QtWidgets.QHBoxLayout(self)  # Change to horizontal layout
+        self.main_layout = QtWidgets.QHBoxLayout(self)
 
-        # Create a vertical layout for input fields
-        self.input_layout = QtWidgets.QVBoxLayout()
+        # Create a group box for the control panel
+        self.control_group = QtWidgets.QGroupBox("Control Panel")
+        self.control_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid #3d3d3d;
+                border-radius: 5px;
+                color: #ffffff;
+            }
+        """)
+        self.input_layout = QtWidgets.QVBoxLayout(self.control_group)
+        self.input_layout.setSpacing(5)
+        self.input_layout.setContentsMargins(5, 5, 5, 5)
 
-        # Create a frame for the button at the top
-        self.button_frame = QtWidgets.QFrame()
-        self.button_layout = QtWidgets.QHBoxLayout(self.button_frame)
-
-        # Start Button
+        # Start Button with improved styling
         self.start_button = QtWidgets.QPushButton("Start Data Collection")
-        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
+        self.start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2ea043;
+                color: white;
+                font-size: 18px;
+                padding: 8px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #3fb950;
+            }
+        """)
         self.start_button.clicked.connect(self.start_data_collection)
-        self.button_layout.addWidget(self.start_button)
+        self.input_layout.addWidget(self.start_button)
 
-        # Add button frame to the input layout
-        self.input_layout.addWidget(self.button_frame)
+        # Configuration section with reduced spacing
+        config_header = QtWidgets.QLabel("Configuration")
+        config_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        self.input_layout.addWidget(config_header)
 
-        # Dropdown for earphone selection
+        # Dropdowns with improved styling and reduced height
+        dropdown_style = """
+            QComboBox { 
+                padding: 3px;
+                max-height: 24px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+        """
+
         self.types = ["A", "B", "C", "D"]
         self.type_combo = QtWidgets.QComboBox()
         self.type_combo.addItems(self.types)
+        self.type_combo.setStyleSheet(dropdown_style)
         self.input_layout.addWidget(QtWidgets.QLabel("Earphone Type:"))
         self.input_layout.addWidget(self.type_combo)
 
-        # Dropdown for length selection
         self.lengths = [str(i) for i in range(5, 31, 3)] + [str(i) for i in [9, 24, 39]] + ["Open", "Blocked"]
         self.length_combo = QtWidgets.QComboBox()
         self.length_combo.addItems(self.lengths)
+        self.length_combo.setStyleSheet(dropdown_style)
         self.input_layout.addWidget(QtWidgets.QLabel("Length (mm):"))
         self.input_layout.addWidget(self.length_combo)
 
-        # Entry for number of repetitions
+        # Advanced settings section with reduced spacing
+        advanced_header = QtWidgets.QLabel("Advanced Settings")
+        advanced_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        self.input_layout.addWidget(advanced_header)
+
+        # Entry fields with improved styling and reduced height
+        entry_style = """
+            QLineEdit {
+                padding: 3px;
+                max-height: 24px;
+                margin: 0px;
+            }
+        """
+
+        # Repetitions (keep this one vertical as it's the main control)
         self.repetitions_entry = QtWidgets.QLineEdit("100")
+        self.repetitions_entry.setStyleSheet(entry_style)
         self.input_layout.addWidget(QtWidgets.QLabel("Number of Repetitions:"))
         self.input_layout.addWidget(self.repetitions_entry)
 
-        # Frequency entries
+        # Create horizontal layouts for paired settings
+        freq_layout = QtWidgets.QHBoxLayout()
+        freq_layout.setSpacing(10)
+        
+        # Start Frequency
+        start_freq_widget = QtWidgets.QWidget()
+        start_freq_layout = QtWidgets.QVBoxLayout(start_freq_widget)
+        start_freq_layout.setSpacing(3)
+        start_freq_layout.setContentsMargins(0, 0, 0, 0)
         self.start_frequency_entry = QtWidgets.QLineEdit("20")
+        self.start_frequency_entry.setStyleSheet(entry_style)
+        start_freq_layout.addWidget(QtWidgets.QLabel("Start Frequency (Hz):"))
+        start_freq_layout.addWidget(self.start_frequency_entry)
+        freq_layout.addWidget(start_freq_widget)
+        
+        # Stop Frequency
+        stop_freq_widget = QtWidgets.QWidget()
+        stop_freq_layout = QtWidgets.QVBoxLayout(stop_freq_widget)
+        stop_freq_layout.setSpacing(3)
+        stop_freq_layout.setContentsMargins(0, 0, 0, 0)
         self.stop_frequency_entry = QtWidgets.QLineEdit("20000")
-        self.input_layout.addWidget(QtWidgets.QLabel("Start Frequency (Hz):"))
-        self.input_layout.addWidget(self.start_frequency_entry)
-        self.input_layout.addWidget(QtWidgets.QLabel("Stop Frequency (Hz):"))
-        self.input_layout.addWidget(self.stop_frequency_entry)
-
-        # Reference resistor value
+        self.stop_frequency_entry.setStyleSheet(entry_style)
+        stop_freq_layout.addWidget(QtWidgets.QLabel("Stop Frequency (Hz):"))
+        stop_freq_layout.addWidget(self.stop_frequency_entry)
+        freq_layout.addWidget(stop_freq_widget)
+        
+        self.input_layout.addLayout(freq_layout)
+        
+        # Reference and Steps in another horizontal layout
+        ref_steps_layout = QtWidgets.QHBoxLayout()
+        ref_steps_layout.setSpacing(10)
+        
+        # Reference
+        ref_widget = QtWidgets.QWidget()
+        ref_layout = QtWidgets.QVBoxLayout(ref_widget)
+        ref_layout.setSpacing(3)
+        ref_layout.setContentsMargins(0, 0, 0, 0)
         self.reference_entry = QtWidgets.QLineEdit("100")
-        self.input_layout.addWidget(QtWidgets.QLabel("Reference in Ohms:"))
-        self.input_layout.addWidget(self.reference_entry)
-
-        # Steps entry
+        self.reference_entry.setStyleSheet(entry_style)
+        ref_layout.addWidget(QtWidgets.QLabel("Reference in Ohms:"))
+        ref_layout.addWidget(self.reference_entry)
+        ref_steps_layout.addWidget(ref_widget)
+        
+        # Steps
+        steps_widget = QtWidgets.QWidget()
+        steps_layout = QtWidgets.QVBoxLayout(steps_widget)
+        steps_layout.setSpacing(3)
+        steps_layout.setContentsMargins(0, 0, 0, 0)
         self.step_entry = QtWidgets.QLineEdit("501")
-        self.input_layout.addWidget(QtWidgets.QLabel("STEPS:"))
-        self.input_layout.addWidget(self.step_entry)
+        self.step_entry.setStyleSheet(entry_style)
+        steps_layout.addWidget(QtWidgets.QLabel("STEPS:"))
+        steps_layout.addWidget(self.step_entry)
+        ref_steps_layout.addWidget(steps_widget)
+        
+        self.input_layout.addLayout(ref_steps_layout)
 
-        # Progress text box
+        # Environmental readings section with reduced spacing
+        readings_header = QtWidgets.QLabel("Environmental Readings")
+        readings_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        self.input_layout.addWidget(readings_header)
+
+        # Create a more compact grid layout for readings
+        readings_grid = QtWidgets.QGridLayout()
+        readings_grid.setSpacing(5)
+        readings_grid.setContentsMargins(0, 0, 0, 0)
+
+        # Style for reading values
+        value_style = "font-weight: bold; color: #58a6ff;"
+
+        self.temperature_label = QtWidgets.QLabel("Temperature:")
+        self.temperature_value = QtWidgets.QLabel("N/A")
+        self.temperature_value.setStyleSheet(value_style)
+        readings_grid.addWidget(self.temperature_label, 0, 0)
+        readings_grid.addWidget(self.temperature_value, 0, 1)
+
+        self.humidity_label = QtWidgets.QLabel("Humidity:")
+        self.humidity_value = QtWidgets.QLabel("N/A")
+        self.humidity_value.setStyleSheet(value_style)
+        readings_grid.addWidget(self.humidity_label, 1, 0)
+        readings_grid.addWidget(self.humidity_value, 1, 1)
+
+        self.pressure_label = QtWidgets.QLabel("Pressure:")
+        self.pressure_value = QtWidgets.QLabel("N/A")
+        self.pressure_value.setStyleSheet(value_style)
+        readings_grid.addWidget(self.pressure_label, 2, 0)
+        readings_grid.addWidget(self.pressure_value, 2, 1)
+
+        self.input_layout.addLayout(readings_grid)
+
+        # Status section with reduced height
+        status_header = QtWidgets.QLabel("Status")
+        status_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        self.input_layout.addWidget(status_header)
+
         self.progress_text = QtWidgets.QTextEdit()
         self.progress_text.setReadOnly(True)
-        self.input_layout.addWidget(QtWidgets.QLabel("Status:"))
+        self.progress_text.setMaximumHeight(80)
+        self.progress_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                padding: 3px;
+            }
+        """)
         self.input_layout.addWidget(self.progress_text)
 
-        # Create a horizontal layout for temperature, humidity, and pressure
-        self.readings_layout = QtWidgets.QHBoxLayout()
+        # Add control group to the main layout
+        self.main_layout.addWidget(self.control_group, stretch=1)
 
-        # Add fields for temperature, humidity, and pressure
-        self.humidity_label = QtWidgets.QLabel("Humidity (%):")
-        self.humidity_value = QtWidgets.QLabel("N/A")  # Placeholder for humidity value
-        self.readings_layout.addWidget(self.humidity_label)
-        self.readings_layout.addWidget(self.humidity_value)
+        # Create a group box for the plot
+        self.plot_group = QtWidgets.QGroupBox("Impedance Plot")
+        self.plot_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid #3d3d3d;
+                border-radius: 5px;
+                color: #ffffff;
+            }
+        """)
+        plot_layout = QtWidgets.QVBoxLayout(self.plot_group)
+        plot_layout.setSpacing(5)
+        plot_layout.setContentsMargins(5, 5, 5, 5)
 
-        self.temperature_label = QtWidgets.QLabel("Temperature (°C):")
-        self.temperature_value = QtWidgets.QLabel("N/A")  # Placeholder for temperature value
-        self.readings_layout.addWidget(self.temperature_label)
-        self.readings_layout.addWidget(self.temperature_value)
-
-        self.pressure_label = QtWidgets.QLabel("Pressure (hPa):")
-        self.pressure_value = QtWidgets.QLabel("N/A")  # Placeholder for pressure value
-        self.readings_layout.addWidget(self.pressure_label)
-        self.readings_layout.addWidget(self.pressure_value)
-
-        # Add the readings layout to the input layout
-        self.input_layout.addLayout(self.readings_layout)
-
-        # Add input layout to the main layout
-        self.main_layout.addLayout(self.input_layout, stretch=1)  # Allow input layout to take less space
-
-        # Create initial plot
-        self.fig, self.ax = plt.subplots()
+        # Create and style the plot
+        plt.style.use('dark_background')
+        self.fig, self.ax = plt.subplots(figsize=(6, 4), facecolor='#1e1e1e')
         self.canvas = FigureCanvas(self.fig)
-
-        # Add the plot to the right side of the main layout
-        self.main_layout.addWidget(self.canvas, stretch=2)  # Allow the canvas to take more space
+        self.fig.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.15)
+        self.ax.set_facecolor('#1e1e1e')
+        self.ax.tick_params(colors='white')
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        self.ax.title.set_color('white')
+        
+        plot_layout.addWidget(self.canvas)
+        self.main_layout.addWidget(self.plot_group, stretch=2)
 
         # Set the title of the plot
         self.ax.set_title('Impedance Magnitude |Z| vs Frequency')
+        self.ax.set_xlabel('Frequency (Hz)')
+        self.ax.set_ylabel('Impedance (Ohms)')
 
         # Load DWF library
         self.load_dwf()
@@ -141,7 +347,7 @@ class DataCollectionApp(QtWidgets.QWidget):
 
         # Timer for reading Arduino data
         self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.read_arduino_data)  # Connect the timer to the read function
+        self.timer.timeout.connect(self.read_arduino_data)
 
     def load_dwf(self):
         if sys.platform.startswith("win"):
@@ -183,23 +389,36 @@ class DataCollectionApp(QtWidgets.QWidget):
         thread = threading.Thread(target=self.collect_data, args=(folder_name, repetitions, start_freq, stop_freq, reference, steps))
         thread.start()
 
-        self.start_button.setStyleSheet("background-color: red; color: black; font-size: 24px;")
+        # Update button appearance for running state
+        self.start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f85149;
+                color: white;
+                font-size: 18px;
+                padding: 8px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #ff6b64;
+            }
+        """)
+        self.start_button.setText("Running...")
 
         # Start the timer to read Arduino data every second
-        self.timer.start(1000)  # Adjust the interval as needed (1000 ms = 1 second)
+        self.timer.start(1000)
 
     def read_arduino_data(self):
         if self.serial_port and self.serial_port.in_waiting > 0:
             line = self.serial_port.readline().decode('utf-8').rstrip()
             try:
-                # Expecting "temp,humidity,pressure" format
                 temperature, humidity, pressure = map(float, line.split(','))
                 self.temperature_value.setText(f"{temperature:.2f}")
                 self.humidity_value.setText(f"{humidity:.2f}")
                 self.pressure_value.setText(f"{pressure:.2f}")
                 return temperature, humidity, pressure
             except ValueError:
-                print("Invalid data from Arduino: ", line)  # Log the invalid data for debugging
+                print("Invalid data from Arduino: ", line)
 
     def collect_data(self, folder_name, repetitions, start_freq, stop_freq, reference, steps):
         # Opens the device, Analog Discovery 2 through the serial port.
@@ -219,8 +438,6 @@ class DataCollectionApp(QtWidgets.QWidget):
         start = int(start_freq)
         stop = int(stop_freq)
         reference = int(reference)
-        self.update_progress("Status: Running")
-        self.start_button.setText("Running")
 
         for run in range(repetitions):
             self.dwf.FDwfAnalogImpedanceReset(hdwf)
@@ -274,8 +491,22 @@ class DataCollectionApp(QtWidgets.QWidget):
         # Stop the timer after data collection is complete
         self.timer.stop()
         self.update_progress("Data collection completed.")
+        
+        # Reset button appearance
         self.start_button.setText("Start Data Collection")
-        self.start_button.setStyleSheet("background-color: green; color: white; font-size: 24px;")
+        self.start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2ea043;
+                color: white;
+                font-size: 18px;
+                padding: 8px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #3fb950;
+            }
+        """)
 
     def update_progress(self, message):
         self.progress_text.append(message)
@@ -283,19 +514,90 @@ class DataCollectionApp(QtWidgets.QWidget):
 
     def update_plot(self, frequencies, impedance):
         self.ax.clear()
-        self.ax.plot(frequencies, impedance, label='|Z| (Ohms)')
+        self.ax.plot(frequencies, impedance, label='|Z| (Ohms)', color='#58a6ff', linewidth=2)
         self.ax.set_xscale('log')
         self.ax.set_yscale('log')
         self.ax.set_xlabel('Frequency (Hz)')
         self.ax.set_ylabel('Impedance (Ohms)')
         self.ax.set_title('Impedance Magnitude |Z| vs Frequency')
+        self.ax.grid(True, linestyle='--', alpha=0.3)
         self.ax.legend()
+        
+        # Ensure dark theme is maintained
+        self.ax.set_facecolor('#1e1e1e')
+        self.ax.tick_params(colors='white')
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        self.ax.title.set_color('white')
+        
         self.canvas.draw()
 
     def closeEvent(self, event):
         if self.serial_port:
-            self.serial_port.close()  # Close the serial port when the application is closed
+            self.serial_port.close()
         event.accept()
+
+    def create_speaker_icon(self, icon_path):
+        """Create a simple speaker icon and save it as PNG."""
+        # Create a 64x64 image with transparent background
+        icon_size = 64
+        image = QtGui.QImage(icon_size, icon_size, QtGui.QImage.Format.Format_ARGB32)
+        image.fill(QtGui.QColor(0, 0, 0, 0))
+        
+        # Create painter
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        
+        # Set up the pen and brush
+        painter.setPen(QtGui.QPen(QtGui.QColor("#58a6ff"), 2))  # Use the theme's blue color
+        
+        # Calculate center and dimensions
+        center_x = icon_size // 2
+        center_y = icon_size // 2
+        
+        # Draw outer circle (speaker frame)
+        frame_radius = 24
+        painter.setBrush(QtGui.QBrush())  # No fill for frame
+        painter.drawEllipse(center_x - frame_radius, center_y - frame_radius, 
+                          frame_radius * 2, frame_radius * 2)
+        
+        # Draw middle circle (suspension)
+        suspension_radius = 18
+        painter.drawEllipse(center_x - suspension_radius, center_y - suspension_radius, 
+                          suspension_radius * 2, suspension_radius * 2)
+        
+        # Draw inner circle (dome/cone)
+        dome_radius = 12
+        painter.setBrush(QtGui.QBrush(QtGui.QColor("#58a6ff")))  # Fill for dome
+        painter.drawEllipse(center_x - dome_radius, center_y - dome_radius, 
+                          dome_radius * 2, dome_radius * 2)
+        
+        # Draw sound waves
+        painter.setBrush(QtGui.QBrush())  # No fill for waves
+        wave_pen = QtGui.QPen(QtGui.QColor("#58a6ff"))
+        
+        # Draw three waves with decreasing width
+        for i, offset in enumerate([32, 38, 44]):
+            wave_pen.setWidth(3 - i)  # Decreasing width for outer waves
+            painter.setPen(wave_pen)
+            
+            # Draw left wave
+            start_angle = 150 * 16  # 150 degrees * 16 (Qt angle units)
+            span_angle = 60 * 16    # 60 degrees span
+            painter.drawArc(center_x - offset, center_y - offset, 
+                          offset * 2, offset * 2, 
+                          start_angle, span_angle)
+            
+            # Draw right wave
+            start_angle = -30 * 16  # -30 degrees
+            painter.drawArc(center_x - offset, center_y - offset, 
+                          offset * 2, offset * 2, 
+                          start_angle, span_angle)
+        
+        painter.end()
+        
+        # Save the image
+        image.save(icon_path)
 
 # Main function that starts the program
 if __name__ == "__main__":

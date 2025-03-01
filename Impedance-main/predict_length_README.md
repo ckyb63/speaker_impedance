@@ -8,7 +8,7 @@ This is a simple, standalone script that uses a trained model to predict the len
 python predict_length.py --model path/to/model.keras --csv path/to/measurement.csv
 ```
 
-### Arguments:
+### Arguments
 
 - `--model`: Path to the trained model file (default: 'best_model.keras')
 - `--csv`: Path to the CSV file to predict (required)
@@ -17,19 +17,19 @@ python predict_length.py --model path/to/model.keras --csv path/to/measurement.c
 
 ## Examples
 
-### Basic usage:
+### Basic usage
 
 ```bash
 python predict_length.py --model best_model.keras --csv Collected_Data_Sep16/A/A_5/A_5_Run1.csv
 ```
 
-### Using CNet model:
+### Using CNet model
 
 ```bash
 python predict_length.py --model trained_model.keras --csv Collected_Data_Sep16/B/B_11/B_11_Run2.csv --model_type CNet
 ```
 
-### With speaker differentiation:
+### With speaker differentiation
 
 ```bash
 python predict_length.py --model best_model.keras --csv Collected_Data_Sep16/C/C_17/C_17_Run3.csv --speaker_diff
@@ -37,7 +37,8 @@ python predict_length.py --model best_model.keras --csv Collected_Data_Sep16/C/C
 
 ## Output
 
-The script will output:
+The script will output
+
 - The CSV file path
 - The predicted length
 - The confidence score (probability) of the prediction
@@ -47,4 +48,4 @@ The script will output:
 - The script automatically handles the preprocessing of the CSV file, including normalization.
 - It assumes the CSV file has the same format as the training data, with columns for frequency, phase, magnitude, resistance, and reactance.
 - The default configuration matches the settings used during training, but you can modify the script if needed.
-- If you're using a model trained with speaker differentiation, make sure to use the `--speaker_diff` flag. 
+- If you're using a model trained with speaker differentiation, make sure to use the `--speaker_diff` flag.

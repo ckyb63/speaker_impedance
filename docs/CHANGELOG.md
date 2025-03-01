@@ -1,8 +1,32 @@
-# Latest
+# Change log
+
+## Latest
+
+## [0.1.5] 1 Mar, 2025
+
+### Added
+
+- Improved dark theme UI with consistent styling across applications
+- Horizontal layout for advanced settings in both GUIs
+- Enhanced speaker icon design with better visual representation
+- Compact layout optimizations for laptop screens
+- Real-time status indicators with improved visibility
+
+### Changed
+
+- Reorganized advanced settings into horizontal pairs for better space utilization
+- Reduced vertical spacing in both applications
+- Improved environmental readings display layout
+- Updated documentation to reflect new UI changes
+
+### Removed
+
+- Project folder as it is using Impedance-main written by Keisuke.
+- Datacollection.docx, it is not supposed to be here.
 
 ## [0.1.3] 27 Feb, 2025
 
-- Entire New Impedance model training. 
+- Entire New Impedance model training.
 - Modified the impedance model written by Keisuke.
 
 ## [0.1.2] 26 Feb, 2025
