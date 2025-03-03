@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](CHANGELOG.md/#latest)
+[![Version](https://img.shields.io/badge/Version-0.1.6-blue.svg)](CHANGELOG.md/#latest)
 ![Python Version](https://img.shields.io/badge/Python-3.10-blue.svg)
 ![Tkinter](https://img.shields.io/badge/Tkinter-8.6-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg)

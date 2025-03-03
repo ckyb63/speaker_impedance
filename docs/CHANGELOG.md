@@ -2,6 +2,23 @@
 
 ## Latest
 
+## [0.1.6] 3 Mar, 2025
+
+### Added
+
+- Added a new GUI for the Auto Impedance Collection script.
+- Added a new Arduino code for reporting specifically the Temperature, Humidity, and Pressure sensor.
+
+### Changed
+
+- There is now a direct pyqt6 converted version of the Auto Impedance Collection script.
+
+### Fixed
+
+- Fixed the issue where the matplotlib backend was not working in the Auto Impedance Collection script.
+- Fixed the issue where the GUI_Predict.py was not working by removing the prediction functions from the GUI for now.
+- Fixed GUI application crash when taking measurements. 
+
 ## [0.1.5] 1 Mar, 2025
 
 ### Added
