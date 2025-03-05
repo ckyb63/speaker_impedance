@@ -16,3 +16,8 @@ __pycache__
 *.keras
 *.h5
 *.csv
+
+*.mat
+*.fig
+
+Analog Discovery/Collected_Data/
