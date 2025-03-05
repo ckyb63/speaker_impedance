@@ -16,12 +16,6 @@ baseFolderOption1 = fullfile('Analog Discovery', 'Collected_Data');
 % Option 2: Path from one directory up
 baseFolderOption2 = fullfile('..', 'Analog Discovery', 'Collected_Data');
 
-% Option 3: Path as originally specified but with correct separator
-baseFolderOption3 = ['Analog Discovery', filesep, 'Collected_Data'];
-
-% Option 4: Absolute path to the Collected_Data folder
-% You can customize this if you know the absolute path
-% baseFolderOption4 = 'C:\Users\maxch\Documents\Purdue Files\Audio Research\Github\speaker_impedance\Analog Discovery\Collected_Data';
 
 % Try each path option until we find one that works
 if exist(baseFolderOption1, 'dir')
@@ -30,12 +24,6 @@ if exist(baseFolderOption1, 'dir')
 elseif exist(baseFolderOption2, 'dir')
     baseFolder = baseFolderOption2;
     fprintf('Found data using path option 2: %s\n', baseFolder);
-elseif exist(baseFolderOption3, 'dir')
-    baseFolder = baseFolderOption3;
-    fprintf('Found data using path option 3: %s\n', baseFolder);
-% elseif exist(baseFolderOption4, 'dir')
-%     baseFolder = baseFolderOption4;
-%     fprintf('Found data using path option 4: %s\n', baseFolder);
 else
     % If none of the options work, let user specify the path interactively
     fprintf('Could not automatically locate the data folder.\n');

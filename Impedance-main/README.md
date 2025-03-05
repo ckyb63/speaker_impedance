@@ -1,20 +1,70 @@
-# Impedance
+# Impedance Model Training
 
-## config
-contains configuraitons for training, dataset... etc. User must modify the values in these files to change the settings.
+This directory contains the code for training, evaluating, and using neural network models to predict speaker tube length from impedance measurements.
 
-## models
-contains model definitions
+## Directory Structure
 
-## utils
-contains helper functions such as dataset creation.
+### `config/`
+Contains configuration files for training, dataset preparation, and model parameters. Modify these files to adjust settings for your specific use case.
 
-## train_model.py
-basic model training and evalutaiton
+Parameters include:
+- Learning rate
+- Batch size
+- Number of epochs
+- Input/output dimensions
+- File paths
 
-## transfer_learning.py
-model training on one dataset followed by finetuning on another dataset and evaluation
+### `models/`
+Contains model architecture definitions for different neural network designs:
+- DNet: Default network architecture
+- CNet: Alternative network with different layer configuration
+- Custom models can be added here
 
-## cluster.py
-K-means clustering
+### `utils/`
+Contains helper functions for:
+- Dataset creation and preprocessing
+- Data normalization
+- File handling
+- Evaluation metrics
 
+## Main Scripts
+
+### `train_model.py`
+The primary script for model training and evaluation.
+
+```bash
+python train_model.py --config config/train_config.json
+```
+
+Key features:
+- Loads and preprocesses impedance data
+- Trains model with specified architecture
+- Evaluates performance on test set
+- Saves trained model and metadata
+
+### `transfer_learning.py`
+Script for transfer learning, where a model is first trained on one dataset, then fine-tuned on another.
+
+```bash
+python transfer_learning.py --source_config config/source_config.json --target_config config/target_config.json
+```
+
+Benefits:
+- Improves performance when target dataset is small
+- Leverages knowledge from one speaker type to another
+- Reduces training time for new models
+
+### `cluster.py`
+Performs K-means clustering on impedance data to identify patterns or groupings.
+
+```bash
+python cluster.py --data_path path/to/data --n_clusters 5
+```
+
+Applications:
+- Dataset exploration
+- Feature discovery
+- Speaker type categorization
+
+### `predict_length.py`
+Standalone script for predicting tube length from CSV files.

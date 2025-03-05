@@ -2,6 +2,13 @@
 
 ## Latest
 
+## [0.1.8] 4 Mar, 2025
+
+### Changed
+
+- Updated Readme files across the repository.
+- Cleaned up information in some files.
+
 ## [0.1.7] 4 Mar, 2025
 
 ### Added
