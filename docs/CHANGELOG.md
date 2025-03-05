@@ -2,6 +2,22 @@
 
 ## Latest
 
+## [0.1.9] 5 Mar, 2025
+
+### Added
+
+- Added an export ML Dataset button to the GUI which will combine all runs to one files for easier ML model training.
+
+### Changed
+
+- Ensured the environemntal data is recorded in the folder and each file name.
+- Removed Pressure from arduino data collection.
+- Readme files updated.
+
+### Notes
+
+- New GUI completed first stress test.
+
 ## [0.1.8] 4 Mar, 2025
 
 ### Changed

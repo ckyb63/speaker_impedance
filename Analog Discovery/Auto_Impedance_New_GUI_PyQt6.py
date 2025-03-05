@@ -24,8 +24,9 @@ from dwfconstants import *
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,
                            QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
                            QMessageBox, QWidget, QGridLayout, QGroupBox, QProgressBar,
-                           QSizePolicy)
+                           QSizePolicy, QCheckBox)
 from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtGui import QIcon
 
 # Matplotlib imports
 import matplotlib.pyplot as plt
@@ -53,7 +54,7 @@ class MplCanvas(FigureCanvas):
 
 # Arduino communication thread
 class ArduinoMonitor(QThread):
-    data_signal = pyqtSignal(float, float, float)  # Temperature, Humidity, Pressure
+    data_signal = pyqtSignal(float, float)  # Temperature, Humidity
     error_signal = pyqtSignal(str)
     
     def __init__(self, port='COM12', baud_rate=115200):
@@ -64,7 +65,6 @@ class ArduinoMonitor(QThread):
         self.serial = None
         self.temperature = 25.0
         self.humidity = 50.0
-        self.pressure = 1013.25  # Default values
         
     def run(self):
         try:
@@ -76,16 +76,14 @@ class ArduinoMonitor(QThread):
                     try:
                         line = self.serial.readline().decode('utf-8').strip()
                         parts = line.split(',')
-                        if len(parts) == 3:
+                        if len(parts) >= 2:  # Changed to check for at least 2 parts
                             temp = float(parts[0])
                             humidity = float(parts[1])
-                            pressure = float(parts[2])
                             
                             self.temperature = temp
                             self.humidity = humidity
-                            self.pressure = pressure
                             
-                            self.data_signal.emit(temp, humidity, pressure)
+                            self.data_signal.emit(temp, humidity)
                     except Exception as e:
                         self.error_signal.emit(f"Error parsing Arduino data: {str(e)}")
                 time.sleep(0.1)
@@ -96,7 +94,7 @@ class ArduinoMonitor(QThread):
                 self.serial.close()
     
     def get_latest_data(self):
-        return (self.temperature, self.humidity, self.pressure)
+        return (self.temperature, self.humidity)
                 
     def stop(self):
         self.running = False
@@ -111,11 +109,12 @@ class DataCollectionWorker(QThread):
     progress_bar_signal = pyqtSignal(int, int)  # Current step, total steps
     finished_signal = pyqtSignal()
     
-    def __init__(self, app, folder_name, repetitions):
+    def __init__(self, app, folder_name, repetitions, record_env_data=True):
         super().__init__()
         self.app = app
         self.folder_name = folder_name
         self.repetitions = repetitions
+        self.record_env_data = record_env_data
         
     def run(self):
         # Opens the device, Analog Discovery 2 through the serial port.
@@ -141,8 +140,8 @@ class DataCollectionWorker(QThread):
             self.progress_signal.emit(f"Starting run {run + 1} of {self.repetitions}")
             
             # Get environmental data
-            temp, humidity, pressure = self.app.arduino_monitor.get_latest_data()
-            self.progress_signal.emit(f"Environmental data: {temp:.1f}°C, {humidity:.1f}%, {pressure:.1f}hPa")
+            temp, humidity = self.app.arduino_monitor.get_latest_data()
+            self.progress_signal.emit(f"Environmental data: {temp:.1f}°C, {humidity:.1f}%")
             
             # Configure the settings for impedance measurements
             self.app.dwf.FDwfAnalogImpedanceReset(hdwf)
@@ -161,12 +160,23 @@ class DataCollectionWorker(QThread):
             rgXs = [0.0]*steps
 
             # Opens and writes to file based on the file structure
-            file_path = os.path.join(self.app.base_folder, f"{self.folder_name}_Run{run + 1}.csv")
+            if self.record_env_data:
+                file_name = f"{self.folder_name}_Run{run + 1}_T{temp:.1f}C_H{humidity:.1f}pct.csv"
+            else:
+                file_name = f"{self.folder_name}_Run{run + 1}.csv"
+                
+            file_path = os.path.join(self.app.base_folder, file_name)
             with open(file_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                # Add environmental data to CSV header
-                writer.writerow([f"Temperature (°C): {temp:.2f}", f"Humidity (%): {humidity:.2f}", f"Pressure (hPa): {pressure:.2f}"])
-                writer.writerow(["Frequency (Hz)", "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", "Trace Xs (Ohm)"])
+                # Add environmental data to CSV header if enabled
+                if self.record_env_data:
+                    writer.writerow([f"Temperature (°C): {temp:.2f}", f"Humidity (%): {humidity:.2f}"])
+                
+                # Update the header row to include environmental data columns if enabled
+                if self.record_env_data:
+                    writer.writerow(["Frequency (Hz)", "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)"])
+                else:
+                    writer.writerow(["Frequency (Hz)", "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", "Trace Xs (Ohm)"])
 
                 for i in range(steps):
                     hz = start + i * (stop - start) / (steps - 1) # linear frequency steps
@@ -196,8 +206,11 @@ class DataCollectionWorker(QThread):
                     rgZ[i] = (resistance.value**2 + reactance.value**2)**0.5
                     rgTheta[i] = math.degrees(math.atan2(reactance.value, resistance.value))
 
-                    # Write data to CSV
-                    writer.writerow([hz, rgTheta[i], rgZ[i], rgRs[i], rgXs[i]])
+                    # Write data to CSV - include environmental data if enabled
+                    if self.record_env_data:
+                        writer.writerow([hz, rgTheta[i], rgZ[i], rgRs[i], rgXs[i], temp, humidity])
+                    else:
+                        writer.writerow([hz, rgTheta[i], rgZ[i], rgRs[i], rgXs[i]])
                     
                     # Only update the text log every 10 steps to reduce UI updates
                     if i % 10 == 0 or i == steps - 1:
@@ -219,6 +232,9 @@ class DataCollectionApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Earphones Impedance Data Collector")
+        
+        # Set the application icon
+        ## self.setWindowIcon(QIcon("Analog Discovery/assets/speaker_icon.png"))
         
         # Set fixed initial size with square-ish aspect ratio
         self.setMinimumSize(1000, 800)
@@ -435,12 +451,11 @@ class DataCollectionApp(QMainWindow):
         env_grid.addWidget(humidity_label, 1, 0)
         env_grid.addWidget(self.humidity_value, 1, 1)
         
-        # Pressure reading
-        pressure_label = QLabel("Pressure:")
-        self.pressure_value = QLabel("1013.25 hPa")
-        self.pressure_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
-        env_grid.addWidget(pressure_label, 2, 0)
-        env_grid.addWidget(self.pressure_value, 2, 1)
+        # Add checkbox for recording environmental data
+        self.env_data_checkbox = QCheckBox("Record Environmental Data")
+        self.env_data_checkbox.setChecked(True)  # Enable by default
+        self.env_data_checkbox.setStyleSheet("color: #ffffff;")
+        env_grid.addWidget(self.env_data_checkbox, 2, 0, 1, 2)  # span 2 columns
         
         self.input_layout.addLayout(env_grid)
 
@@ -615,11 +630,10 @@ class DataCollectionApp(QMainWindow):
         # Add plot group to the main layout - now use stretch factor 3 to give more space
         self.main_layout.addWidget(self.plot_group, stretch=3)
 
-    def update_environmental_data(self, temperature, humidity, pressure):
+    def update_environmental_data(self, temperature, humidity):
         """Update the environmental data labels with values from Arduino"""
         self.temp_value.setText(f"{temperature:.1f} °C")
         self.humidity_value.setText(f"{humidity:.1f} %")
-        self.pressure_value.setText(f"{pressure:.1f} hPa")
         
     def handle_arduino_error(self, error_message):
         """Handle Arduino connection errors"""
@@ -627,10 +641,8 @@ class DataCollectionApp(QMainWindow):
         # Update the environmental labels to show error state
         self.temp_value.setText("Error")
         self.humidity_value.setText("Error")
-        self.pressure_value.setText("Error")
         self.temp_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
         self.humidity_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        self.pressure_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
 
     def load_dwf(self):
         """Load the appropriate DWF library based on platform"""
@@ -702,14 +714,14 @@ class DataCollectionApp(QMainWindow):
         self.canvas.draw()
 
     def start_data_collection(self):
-        """Start the data collection process after validating inputs"""
-        # Getting the input from the GUI
+        """Start the data collection process in a separate thread"""
+        # Get values from input fields
         selected_type = self.type_combo.currentText()
         selected_length = self.length_combo.currentText()
         
-        # Validate inputs
         try:
             repetitions = int(self.repetitions_entry.text())
+            
             if repetitions <= 0:
                 raise ValueError("Number of repetitions must be a positive integer.")
                 
@@ -730,6 +742,13 @@ class DataCollectionApp(QMainWindow):
         
         # Folder selection and creation
         folder_name = f"{selected_type}_{selected_length}"
+        
+        # If environmental data recording is enabled, append temperature and humidity to folder name
+        if self.env_data_checkbox.isChecked():
+            # Get current environmental data
+            temp, humidity = self.arduino_monitor.get_latest_data()
+            folder_name = f"{folder_name}_T{temp:.1f}C_H{humidity:.1f}pct"
+            
         self.base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Collected_Data", folder_name)
         if not os.path.exists(self.base_folder):
             os.makedirs(self.base_folder)
@@ -754,7 +773,7 @@ class DataCollectionApp(QMainWindow):
         self.progress_bar.setValue(0)
         
         # Start data collection in a worker thread
-        self.worker = DataCollectionWorker(self, folder_name, repetitions)
+        self.worker = DataCollectionWorker(self, folder_name, repetitions, self.env_data_checkbox.isChecked())
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.plot_signal.connect(self.update_plot)
         self.worker.progress_bar_signal.connect(self.update_progress_bar)
@@ -764,8 +783,8 @@ class DataCollectionApp(QMainWindow):
         self.update_progress(f"Starting data collection for {selected_type}_{selected_length} with {repetitions} repetitions")
 
     def collection_finished(self):
-        """Handle completion of data collection"""
-        self.progress_label.setText("Data collection completed.")
+        """Update UI after data collection is complete"""
+        self.progress_label.setText("Status: Complete")
         self.start_button.setText("Start Data Collection")
         self.start_button.setStyleSheet("""
             QPushButton {
@@ -782,12 +801,175 @@ class DataCollectionApp(QMainWindow):
         """)
         self.start_button.setEnabled(True)
         
+        # Show the export dataset button if environmental data recording was enabled
+        if hasattr(self, 'worker') and self.worker.record_env_data:
+            if not hasattr(self, 'export_dataset_button'):
+                self.export_dataset_button = QPushButton("Export ML Training Dataset")
+                self.export_dataset_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2c2c7c;
+                        color: white;
+                        font-size: 14px;
+                        padding: 6px;
+                        border-radius: 4px;
+                        border: none;
+                    }
+                    QPushButton:hover {
+                        background-color: #3b3b9c;
+                    }
+                """)
+                self.export_dataset_button.clicked.connect(self.export_ml_dataset)
+                self.input_layout.addWidget(self.export_dataset_button)
+            self.export_dataset_button.setVisible(True)
+        
         # Show completion message
         QMessageBox.information(self, "Data Collection Complete", 
                               "All measurement runs have been completed successfully!\n\n"
                               "The data has been saved to CSV files in the specified folder.")
         
-        self.update_progress("Data collection completed successfully.")
+        # Play a sound to notify the user
+        try:
+            if sys.platform.startswith("win"):
+                import winsound
+                winsound.MessageBeep()
+        except:
+            pass  # Fallback silently if sound cannot be played
+        
+        self.update_progress("Data collection completed.")
+        
+    def export_ml_dataset(self):
+        """Export a consolidated dataset for machine learning training"""
+        try:
+            # Create a folder for ML datasets if it doesn't exist
+            ml_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ML_Datasets")
+            if not os.path.exists(ml_folder):
+                os.makedirs(ml_folder)
+                
+            # Extract type and length from the folder name
+            folder_parts = os.path.basename(self.base_folder).split('_')
+            if len(folder_parts) >= 2:
+                earphone_type = folder_parts[0]
+                earphone_length = folder_parts[1]
+                
+                # Check if there's environmental data in the folder name
+                env_data_in_name = False
+                temperature_str = "N/A"
+                humidity_str = "N/A"
+                
+                if len(folder_parts) >= 4 and folder_parts[2].startswith('T') and folder_parts[3].startswith('H'):
+                    env_data_in_name = True
+                    # Extract temperature and humidity from folder name
+                    temperature_str = folder_parts[2][1:-1]  # Remove 'T' prefix and 'C' suffix
+                    humidity_str = folder_parts[3][1:-3]     # Remove 'H' prefix and 'pct' suffix
+            else:
+                earphone_type = "unknown"
+                earphone_length = "unknown"
+                
+            # Create the output file name based on type and length
+            output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_All.csv")
+            
+            # Check if file already exists
+            file_exists = os.path.exists(output_file)
+            
+            # Get all CSV files in the current measurement folder
+            csv_files = [f for f in os.listdir(self.base_folder) if f.endswith('.csv') and ('Run' in f)]
+            
+            # Sort the files by run number
+            def get_run_number(filename):
+                # Extract the run number from the filename
+                parts = filename.split('_')
+                for part in parts:
+                    if part.startswith('Run'):
+                        return int(part[3:].split('.')[0].split('_')[0])
+                return 0
+                
+            csv_files.sort(key=get_run_number)
+            
+            if not csv_files:
+                self.update_progress("No data files found to export.")
+                return
+            
+            # If file exists, confirm overwrite
+            if file_exists:
+                reply = QMessageBox.question(
+                    self, 
+                    'File Exists', 
+                    f'The file "{os.path.basename(output_file)}" already exists.\nDo you want to overwrite it?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                    QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.No:
+                    self.update_progress("ML dataset export cancelled.")
+                    return
+            
+            # Write header and data to the consolidated file
+            with open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
+                writer = csv.writer(outfile)
+                writer.writerow([
+                    "Type", "Length", "Run", "Frequency (Hz)", 
+                    "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", 
+                    "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)"
+                ])
+                
+                # Process each CSV file
+                for i, file_name in enumerate(csv_files):
+                    run_number = i + 1
+                    file_path = os.path.join(self.base_folder, file_name)
+                    
+                    with open(file_path, mode='r', newline='', encoding='utf-8') as infile:
+                        reader = csv.reader(infile)
+                        
+                        # Skip header rows (2 or 3 rows depending on env data)
+                        rows = list(reader)
+                        header_rows = 2 if "Temperature" in rows[0][0] else 1
+                        
+                        # Check if this file has environmental data
+                        has_env_data = len(rows[header_rows]) > 5
+                        
+                        # Process data rows
+                        for row in rows[header_rows:]:
+                            if not row:  # Skip empty rows
+                                continue
+                                
+                            # Extract data
+                            if has_env_data:
+                                freq, theta, z, rs, xs, temp, humidity = row
+                            else:
+                                freq, theta, z, rs, xs = row
+                                temp = "N/A"
+                                humidity = "N/A"
+                                
+                            # Write consolidated row
+                            writer.writerow([
+                                earphone_type, earphone_length, run_number,
+                                freq, theta, z, rs, xs, temp, humidity
+                            ])
+            
+            self.update_progress(f"ML training dataset exported to: {earphone_type}_{earphone_length}_All.csv")
+            
+            # Ask if user wants to open the folder
+            reply = QMessageBox.question(
+                self, 
+                'Dataset Exported', 
+                f'Dataset was exported as:\n{earphone_type}_{earphone_length}_All.csv\n\nWould you like to open the folder?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                # Open the folder in file explorer
+                if sys.platform.startswith('win'):
+                    os.startfile(ml_folder)
+                elif sys.platform.startswith('darwin'):  # macOS
+                    import subprocess
+                    subprocess.Popen(['open', ml_folder])
+                else:  # Linux
+                    import subprocess
+                    subprocess.Popen(['xdg-open', ml_folder])
+                    
+        except Exception as e:
+            self.update_progress(f"Error exporting dataset: {str(e)}")
+            QMessageBox.critical(self, "Export Error", f"Failed to export dataset: {str(e)}")
 
     def closeEvent(self, event):
         """Handle window close event"""

@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Version](https://img.shields.io/badge/Version-0.1.8-blue.svg)](CHANGELOG.md/#latest)
+[![Version](https://img.shields.io/badge/Version-0.1.9-blue.svg)](CHANGELOG.md/#latest)
 ![Python Version](https://img.shields.io/badge/Python-3.12.9-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg)
 ![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg)
@@ -53,12 +53,14 @@ For detailed information about each component, please refer to their respective 
 ## Getting Started
 
 1. Clone this repository:
+
    ```bash
    git clone https://github.com/yourusername/speaker_impedance.git
    cd speaker_impedance
    ```
 
 2. Install required dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -70,6 +72,7 @@ For detailed information about each component, please refer to their respective 
    - (Optional) Connect an Arduino with BME280 sensor to monitor environmental conditions
 
 5. Run either GUI application:
+
    ```bash
    python Analog\ Discovery/Auto_Impedance_PyQt6.py
    # or

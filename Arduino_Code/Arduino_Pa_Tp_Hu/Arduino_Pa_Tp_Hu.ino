@@ -3,7 +3,7 @@
 // Format is compatible with the Auto_Impedance_PyQt6.py GUI
 
 // Author: Max Chen
-// Version: 25.03.05
+// Version: 25.03.05-1
 // Updated for Arduino Uno + DHT22 - Analog Discovery compatibility fix
 
 #include <DHT.h>  // Include DHT library
@@ -16,7 +16,6 @@ DHT dht(DHTPIN, DHTTYPE);  // Initialize DHT sensor
 // Store last valid readings to use as fallbacks
 float lastValidTemp = 25.0;    // Default room temperature
 float lastValidHumidity = 50.0; // Default humidity
-float pressure = 1013.25;      // Default atmospheric pressure in hPa (placeholder)
 
 // Variables to manage timing and communication
 unsigned long lastSendTime = 0;
@@ -79,8 +78,7 @@ void sendSensorData() {
     // Send readings in the comma-separated format expected by the Python GUI
     // Always provide values, even if using last valid readings
     Serial.print(lastValidTemp, 2); Serial.print(",");  // 2 decimal places for consistency
-    Serial.print(lastValidHumidity, 2); Serial.print(",");
-    Serial.println(pressure, 2);  // Adding pressure value for compatibility
+    Serial.print(lastValidHumidity, 2); Serial.print("\n");
 }
 
 void processSerialCommands() {
