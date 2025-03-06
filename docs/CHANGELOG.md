@@ -2,6 +2,21 @@
 
 ## Latest
 
+## [0.1.10] 6 Mar, 2025
+
+### Added
+
+- Favicon for the GUI, found in the assets folder.
+
+### Changed
+
+- Moved both the tkinter and pyqt6 older GUI into a folder called "Older"
+- Updated the Readme files across the repository.
+
+### Fixed
+
+- ML All in one file name now properly includes temperature and humidity.
+
 ## [0.1.9] 5 Mar, 2025
 
 ### Added
@@ -16,7 +31,7 @@
 
 ### Notes
 
-- New GUI completed first stress test.
+- New GUI completed first stress test of 100 measurment runs.
 
 ## [0.1.8] 4 Mar, 2025
 

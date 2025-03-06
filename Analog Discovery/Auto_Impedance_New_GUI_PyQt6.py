@@ -1,6 +1,6 @@
 """
-Name: Auto Impedance with PyQt6
-Author: Max Chen v25.03.03
+Name: New Auto Impedance Measurement with PyQt6
+Author: Max Chen v25.03.06
 Description: 
 This is a GUI script written with PyQt6 to automate and speed up earphone impedance data collection with the Analog Discovery 2 from Digilent
 Using the API from the DIGILENT WaveForms software, this is a custom script to directly use the existing impedance measuring function in the software.
@@ -234,7 +234,7 @@ class DataCollectionApp(QMainWindow):
         self.setWindowTitle("Earphones Impedance Data Collector")
         
         # Set the application icon
-        ## self.setWindowIcon(QIcon("Analog Discovery/assets/speaker_icon.png"))
+        self.setWindowIcon(QIcon("Analog Discovery/assets/speaker_icon.png"))
         
         # Set fixed initial size with square-ish aspect ratio
         self.setMinimumSize(1000, 800)
@@ -852,12 +852,10 @@ class DataCollectionApp(QMainWindow):
                 earphone_length = folder_parts[1]
                 
                 # Check if there's environmental data in the folder name
-                env_data_in_name = False
                 temperature_str = "N/A"
                 humidity_str = "N/A"
                 
                 if len(folder_parts) >= 4 and folder_parts[2].startswith('T') and folder_parts[3].startswith('H'):
-                    env_data_in_name = True
                     # Extract temperature and humidity from folder name
                     temperature_str = folder_parts[2][1:-1]  # Remove 'T' prefix and 'C' suffix
                     humidity_str = folder_parts[3][1:-3]     # Remove 'H' prefix and 'pct' suffix
@@ -865,8 +863,8 @@ class DataCollectionApp(QMainWindow):
                 earphone_type = "unknown"
                 earphone_length = "unknown"
                 
-            # Create the output file name based on type and length
-            output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_All.csv")
+            # Create the output file name based on type, length, temperature, and humidity
+            output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
             
             # Check if file already exists
             file_exists = os.path.exists(output_file)
@@ -945,13 +943,13 @@ class DataCollectionApp(QMainWindow):
                                 freq, theta, z, rs, xs, temp, humidity
                             ])
             
-            self.update_progress(f"ML training dataset exported to: {earphone_type}_{earphone_length}_All.csv")
+            self.update_progress(f"ML training dataset exported to: {earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
             
             # Ask if user wants to open the folder
             reply = QMessageBox.question(
                 self, 
                 'Dataset Exported', 
-                f'Dataset was exported as:\n{earphone_type}_{earphone_length}_All.csv\n\nWould you like to open the folder?',
+                f'Dataset was exported as:\n{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv\n\nWould you like to open the folder?',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
                 QMessageBox.StandardButton.No
             )

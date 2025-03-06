@@ -1,23 +1,27 @@
 # Speaker Impedance
 
-[![Version](https://img.shields.io/badge/Version-0.1.9-blue.svg)](CHANGELOG.md/#latest)
-![Python Version](https://img.shields.io/badge/Python-3.12.9-blue.svg)
-![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg)
-![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg)
+[![Version](https://img.shields.io/badge/Version-0.1.10-blue.svg)](CHANGELOG.md/#latest)
+[![Python Version](https://img.shields.io/badge/Python-3.12.9-blue.svg)](https://www.python.org/downloads/release/python-3129/)
+[![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg)](https://pypi.org/project/PyQt6/)
+[![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
 
 ## Overview
 
-This repository contains the code and data for the speaker impedance project. There are 4 main components to the project:
+This repository contains the code and data for the speaker impedance research project. THe following are the main components of the project:
 
-1. **Analog Discovery** - This is the hardware device used to measure speaker impedance. The project includes two PyQt6-based GUIs:
-   - `Auto_Impedance_PyQt6.py`: A modern dark-themed GUI for automated impedance data collection
-   - `GUI_Predict.py`: A companion application for impedance measurement and length prediction
+1. **Analog Discovery** - The device of choice for this project is the Analog Discovery 2. This contains Automated impedance measurement application developed using PyQt6 with the WaveForms SDK.
+   - `Auto_Impedance_New_GUI_PyQt6.py`: The latest newly developed GUI for automated impedance data collection.
+   - Older versions of the GUI are located in the `Older` folder. The older GUI was developed using tkinter, with an identical application developed using PyQt6.
 
 2. **Tympan** - Working with the Tympan library, this module is developed to allow the impedance measurement process to be done on a Tympan with the audio hat.
 
-3. **Arduino** - Environmental monitoring system that reads temperature, humidity, and pressure data from the testing enclosure. The data is displayed in real-time in both GUIs and recorded in the measurement CSV files.
+3. **Arduino Code** - Environmental monitoring system that reads temperature, and humiditydata from the testing enclosure. The data is displayed in real-time in the GUIs and recorded in the measurement CSV files.
 
-4. **Model** - AI model for predicting speaker tube length from impedance measurements, with support for different model architectures (DNet/CNet) and speaker differentiation.
+4. **Impedance Main** - AI model for predicting speaker tube length from impedance measurements, with support for different model architectures (DNet/CNet) and speaker differentiation. See the [Impedance Main](../Impedance-main/README.md) for more details.
+
+5. **Prediction Measurement App** - Standalone script for predicting speaker tube length from impedance measurements. The idea is that a measurement can be made and the length can be predicted immediately. See the [Prediction Measurement App](../Prediction_Measurement_App/README.md) for more details.
+
+6. **MATLAB Code** - MATLAB code for automated plotting of impedance data for visualization.
 
 ## Key Features
 
@@ -25,7 +29,7 @@ This repository contains the code and data for the speaker impedance project. Th
 
 - Streamlined control panel with intuitive grouping
 - Real-time impedance plotting with dark theme
-- Environmental readings display (temperature, humidity, pressure)
+- Environmental readings display (temperature, humidity)
 - Automated data collection with progress tracking
 
 ### Prediction Interface
@@ -42,13 +46,6 @@ This repository contains the code and data for the speaker impedance project. Th
 - Environmental data logging with each measurement
 - Consistent CSV format for training and prediction
 
-## Repository Structure
-
-For detailed information about each component, please refer to their respective documentation:
-
-- [Prediction & Measurement App](../Prediction_Measurement_App/README.md) - GUI applications for data collection and prediction
-- [Model Training](../Impedance-main/README.md) - AI model for length prediction
-- [Standalone Prediction Script](../Impedance-main/predict_length_README.md) - Command-line prediction tool
 
 ## Getting Started
 
@@ -73,19 +70,12 @@ For detailed information about each component, please refer to their respective 
 
 5. Run either GUI application:
 
-   ```bash
-   python Analog\ Discovery/Auto_Impedance_PyQt6.py
-   # or
-   python Prediction_Measurement_App/GUI_Predict.py
-   ```
-
 ## Data Collection Workflow
 
-1. Configure measurement settings (speaker type, length, frequency range)
+1. Configure measurement settings (speaker type, length, frequency range) or keep it on default
 2. Connect the speaker to the Analog Discovery
 3. Start measurement
 4. Review collected data
-5. (Optional) Run length prediction on the collected data
 
 ## Troubleshooting
 
@@ -98,4 +88,5 @@ For more detailed instructions, see the [changelog](CHANGELOG.md) for recent upd
 ## Contributors
 
 Max Chen
+
 Keisuke Nakamura
