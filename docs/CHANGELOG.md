@@ -2,6 +2,12 @@
 
 ## Latest
 
+## [0.1.11] 6 Mar, 2025
+
+### Added
+
+- Added a new MATLAB script to plot the impedance data for the A - 8 Humidity  difference dataset as a test to see if the impedance is affected by humidity.
+
 ## [0.1.10] 6 Mar, 2025
 
 ### Added
@@ -115,3 +121,10 @@
 ## [0.1.0] 20 Feb, 2025
 
 - Initial release and update of the Speaker Impedance project after previous scattered updates.
+
+## [0.1.0-pre] 14 Oct ~ 18 Nov, 2024
+
+- Initial development of the Speaker Impedance project.
+  - TKinter GUI
+  - Tympan Module
+  - MATLAB Visualization Code

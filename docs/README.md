@@ -1,13 +1,13 @@
 # Speaker Impedance
 
-[![Version](https://img.shields.io/badge/Version-0.1.10-blue.svg)](CHANGELOG.md/#latest)
+[![Version](https://img.shields.io/badge/Version-0.1.11-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.12.9-blue.svg)](https://www.python.org/downloads/release/python-3129/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
 
 ## Overview
 
-This repository contains the code and data for the speaker impedance research project. THe following are the main components of the project:
+This repository contains the code and data for the speaker impedance research project. The following are the main components of the project:
 
 1. **Analog Discovery** - The device of choice for this project is the Analog Discovery 2. This contains Automated impedance measurement application developed using PyQt6 with the WaveForms SDK.
    - `Auto_Impedance_New_GUI_PyQt6.py`: The latest newly developed GUI for automated impedance data collection.
@@ -45,7 +45,6 @@ This repository contains the code and data for the speaker impedance research pr
 - Automatic organization of data by speaker type and length
 - Environmental data logging with each measurement
 - Consistent CSV format for training and prediction
-
 
 ## Getting Started
 
