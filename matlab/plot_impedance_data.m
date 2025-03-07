@@ -1,13 +1,27 @@
-% Script to average and plot impedance data from A5 and A8 runs
+% Script to plot impedance data for a given speaker and length measurements
 % This script loads CSV files from the Analog Discovery/Collected_Data folder,
 % averages data across 100 runs for each condition, and plots the results.
 
+%NOTE: This script plots data without environmental measurements.
+
+% Author: Max Chen, v25.03
+
+% Clear workspace and command window
 clear;
 clc;
 close all;
 
-% Define paths to data folders - using filesep for cross-platform compatibility
-% Try multiple possible paths to handle different working directory scenarios
+% Variables to make the script more flexible
+speaker = 'B';
+lengths = '20';
+
+legend1 = 'Ambient';
+legend2 = 'Noisy';
+
+folder_1_name = 'B_20';
+folder_2_name = 'B_23';
+
+% Define paths to data folders - using filesep for cross-platform compatibility, 2 methods to look for the data folder
 fprintf('Attempting to locate data folders...\n');
 
 % Option 1: Direct path from current directory
@@ -16,8 +30,7 @@ baseFolderOption1 = fullfile('Analog Discovery', 'Collected_Data');
 % Option 2: Path from one directory up
 baseFolderOption2 = fullfile('..', 'Analog Discovery', 'Collected_Data');
 
-
-% Try each path option until we find one that works
+% Try each path option
 if exist(baseFolderOption1, 'dir')
     baseFolder = baseFolderOption1;
     fprintf('Found data using path option 1: %s\n', baseFolder);
@@ -37,8 +50,8 @@ else
 end
 
 % Define subfolder paths
-A5_folder = fullfile(baseFolder, 'A_5');
-A8_folder = fullfile(baseFolder, 'A_8');
+folder_1 = fullfile(baseFolder, folder_1_name);
+folder_2 = fullfile(baseFolder, folder_2_name);
 
 % Check if the paths exist
 fprintf('Checking paths...\n');
@@ -46,12 +59,12 @@ if ~exist(baseFolder, 'dir')
     error('Base folder does not exist: %s\nCheck if the path is correct.', baseFolder);
 end
 
-if ~exist(A5_folder, 'dir')
-    error('A5 folder does not exist: %s\nCheck if the path is correct.', A5_folder);
+if ~exist(folder_1, 'dir')
+    error(folder_1_name + ' folder does not exist: %s\nCheck if the path is correct.', folder_1);
 end
 
-if ~exist(A8_folder, 'dir')
-    error('A8 folder does not exist: %s\nCheck if the path is correct.', A8_folder);
+if ~exist(folder_2, 'dir')
+    error(folder_2_name + ' folder does not exist: %s\nCheck if the path is correct.', folder_2);
 end
 
 % Print folder contents to help diagnose issues
@@ -61,14 +74,14 @@ for i = 1:length(dirContents)
     fprintf('  %s\n', dirContents(i).name);
 end
 
-fprintf('Contents of A5 folder: %s\n', A5_folder);
-dirContentsA5 = dir(A5_folder);
+fprintf('Contents of %s folder: %s\n', folder_1_name, folder_1);
+dirContentsA5 = dir(folder_1);
 for i = 1:length(dirContentsA5)
     fprintf('  %s\n', dirContentsA5(i).name);
 end
 
-fprintf('Contents of A8 folder: %s\n', A8_folder);
-dirContentsA8 = dir(A8_folder);
+fprintf('Contents of %s folder: %s\n', folder_2_name, folder_2);
+dirContentsA8 = dir(folder_2);
 for i = 1:length(dirContentsA8)
     fprintf('  %s\n', dirContentsA8(i).name);
 end
@@ -161,68 +174,68 @@ function [avgFreq, avgMag, avgPhase, avgRs, avgXs] = processFolder(folderPath)
 end
 
 % Process data from both folders
-fprintf('Processing A5 data...\n');
-[A5_freq, A5_mag, A5_phase, A5_rs, A5_xs] = processFolder(A5_folder);
+fprintf('Processing %s data...\n', folder_1_name);
+[freq_1, mag_1, phase_1, rs_1, xs_1] = processFolder(folder_1);
 
-fprintf('Processing A8 data...\n');
-[A8_freq, A8_mag, A8_phase, A8_rs, A8_xs] = processFolder(A8_folder);
+fprintf('Processing %s data...\n', folder_2_name);
+[freq_2, mag_2, phase_2, rs_2, xs_2] = processFolder(folder_2);
 
 % Create plots
 figure('Position', [100, 100, 1200, 800], 'Color', 'white');
 
-% Plot 1: Magnitude
+% Plot 1: Impedance Magnitude
 subplot(2, 2, 1);
-semilogx(A5_freq, A5_mag, 'b-', 'LineWidth', 1.5);
+semilogx(freq_1, mag_1, 'b-', 'LineWidth', 1.5);
 hold on;
-semilogx(A8_freq, A8_mag, 'r-', 'LineWidth', 1.5);
+semilogx(freq_2, mag_2, 'r-', 'LineWidth', 1.5);
 hold off;
 grid on;
 xlabel('Frequency (Hz)');
 ylabel('|Z| (Ohm)');
 title('Impedance Magnitude');
-legend('A5', 'A8', 'Location', 'best');
+legend(legend1, legend2, 'Location', 'best');
 
-% Plot 2: Phase
+% Plot 2: Impedance Phase
 subplot(2, 2, 2);
-semilogx(A5_freq, A5_phase, 'b-', 'LineWidth', 1.5);
+semilogx(freq_1, phase_1, 'b-', 'LineWidth', 1.5);
 hold on;
-semilogx(A8_freq, A8_phase, 'r-', 'LineWidth', 1.5);
+semilogx(freq_2, phase_2, 'r-', 'LineWidth', 1.5);
 hold off;
 grid on;
 xlabel('Frequency (Hz)');
 ylabel('Phase (deg)');
 title('Impedance Phase');
-legend('A5', 'A8', 'Location', 'best');
+legend(legend1, legend2, 'Location', 'best');
 
 % Plot 3: Real Part
 subplot(2, 2, 3);
-semilogx(A5_freq, A5_rs, 'b-', 'LineWidth', 1.5);
+semilogx(freq_1, rs_1, 'b-', 'LineWidth', 1.5);
 hold on;
-semilogx(A8_freq, A8_rs, 'r-', 'LineWidth', 1.5);
+semilogx(freq_2, rs_2, 'r-', 'LineWidth', 1.5);
 hold off;
 grid on;
 xlabel('Frequency (Hz)');
 ylabel('Rs (Ohm)');
 title('Resistance (Real Part)');
-legend('A5', 'A8', 'Location', 'best');
+legend(legend1, legend2, 'Location', 'best');
 
 % Plot 4: Imaginary Part
 subplot(2, 2, 4);
-semilogx(A5_freq, A5_xs, 'b-', 'LineWidth', 1.5);
+semilogx(freq_1, xs_1, 'b-', 'LineWidth', 1.5);
 hold on;
-semilogx(A8_freq, A8_xs, 'r-', 'LineWidth', 1.5);
+semilogx(freq_2, xs_2, 'r-', 'LineWidth', 1.5);
 hold off;
 grid on;
 xlabel('Frequency (Hz)');
 ylabel('Xs (Ohm)');
 title('Reactance (Imaginary Part)');
-legend('A5', 'A8', 'Location', 'best');
+legend(legend1, legend2, 'Location', 'best');
 
-% Add a super title
-sgtitle('Comparison of Averaged Impedance Data: A5 vs A8', 'FontSize', 14, 'FontWeight', 'bold');
+% Add a super for the four plots title
+sgtitle(sprintf('Comparison of Averaged Impedance Data: %s vs %s at %s  %s mm', legend1, legend2, speaker, lengths), 'FontSize', 14, 'FontWeight', 'bold');
 
-% Save the figure
-saveas(gcf, 'A5_vs_A8_impedance_comparison.fig');
-saveas(gcf, 'A5_vs_A8_impedance_comparison.png');
+saveas(gcf, sprintf('figures/%s_vs_%s_impedance_comparison_%s_%s.fig', legend1, legend2, speaker, lengths));
 
-fprintf('Analysis complete. Figure saved as A5_vs_A8_impedance_comparison.fig and .png\n'); 
+% Save the figure as a PNG, it includes the variable to be compared and the speaker, length used to collect the data.
+saveas(gcf, sprintf('figures/%s_vs_%s_impedance_comparison_%s_%s.png', legend1, legend2, speaker, lengths));
+fprintf('Analysis complete. Figure saved as %s_vs_%s_impedance_comparison_%s_%s.png\n', legend1, legend2, speaker, lengths); 

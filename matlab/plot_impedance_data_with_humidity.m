@@ -2,16 +2,29 @@
 % This script loads two combined CSV files from the ML_Datasets folder,
 % averages data across the 100 runs for each frequency, and plots the results.
 
+%NOTE: This script takes the combined CSV files, its main purpose is to plot the impedance data with humidity difference.
+% Author: Max Chen, v25.03
+
+% Clear workspace and command window
 clear;
 clc;
 close all;
+
+% Variables to make the script more flexible
+speaker = 'A';
+lengths = '8';
+legend1 = 'Ambient';
+legend2 = 'Noisy';
+
+file_1_name = 'A_8_T21.8_H80.7_All.csv';
+file_2_name = 'A_8_T22.0_H22.0_All.csv';
 
 % Define the path to the ML_Datasets folder
 ml_folder = fullfile('..', 'Analog Discovery', 'ML_Datasets');
 
 % Specify the names of the combined CSV files
-combined_file1 = fullfile(ml_folder, 'A_8_T21.8_H80.7_All.csv'); % Update with your actual combined file name
-combined_file2 = fullfile(ml_folder, 'A_8_T22.0_H22.0_All.csv'); % Update with your actual combined file name
+combined_file1 = fullfile(ml_folder, file_1_name); % Update with your actual combined file name
+combined_file2 = fullfile(ml_folder, file_2_name); % Update with your actual combined file name
 
 % Check if the combined files exist
 if ~exist(combined_file1, 'file')
@@ -109,9 +122,9 @@ title(sprintf('Reactance (Imaginary Part) (Avg Humidity: %.2f%% vs %.2f%%)', avg
 legend(sprintf('%.2f%%', avg_humidities1), sprintf('%.2f%%', avg_humidities2), 'Location', 'best');
 
 % Add a super title
-sgtitle('Comparison of Averaged Impedance Data from A - 8', 'FontSize', 14, 'FontWeight', 'bold');
+sgtitle(sprintf('Comparison of Averaged Impedance Data from %s - %s', speaker, lengths), 'FontSize', 14, 'FontWeight', 'bold');
 
 % Save the figure
-saveas(gcf, 'Averaged_impedance_data_comparison_A8.png');
-
-fprintf('Analysis complete. Figure saved as Averaged_impedance_data_comparison.png\n');
+saveas(gcf, sprintf('figures/Averaged_impedance_data_comparison_%s_%s.fig', speaker, lengths));
+saveas(gcf, sprintf('figures/Averaged_impedance_data_comparison_%s_%s.png', speaker, lengths));
+fprintf('Analysis complete. Figure saved as Averaged_impedance_data_comparison_%s_%s.png\n', speaker, lengths);

@@ -2,13 +2,27 @@
 
 ## Latest
 
-## [0.1.11] 6 Mar, 2025
+## [0.9.1] 7 Mar, 2025
+
+### Changed
+
+- Updated the MATLAB scripts to be more flexible and easier to use, also saves figures in the figures folder.
+- Updated the version numbers to follow more proper versioning scheme. (MAJOR.Additions.Changes|fixes|removed|notes)
+- Changelog updated to follow: Added, Changed, Fixed, Removed, Notes.
+
+### Notes
+
+- Temporary measurements made to test and confirm if impedanc is affected by the following factors:
+  - Humidity
+  - External Noise
+
+## [0.9.0] 6 Mar, 2025 (0.1.11)
 
 ### Added
 
 - Added a new MATLAB script to plot the impedance data for the A - 8 Humidity  difference dataset as a test to see if the impedance is affected by humidity.
 
-## [0.1.10] 6 Mar, 2025
+## [0.8.1] 6 Mar, 2025 (0.1.10)
 
 ### Added
 
@@ -23,7 +37,7 @@
 
 - ML All in one file name now properly includes temperature and humidity.
 
-## [0.1.9] 5 Mar, 2025
+## [0.8.0] 5 Mar, 2025 (0.1.9)
 
 ### Added
 
@@ -39,14 +53,14 @@
 
 - New GUI completed first stress test of 100 measurment runs.
 
-## [0.1.8] 4 Mar, 2025
+## [0.7.1] 4 Mar, 2025 (0.1.8)
 
 ### Changed
 
 - Updated Readme files across the repository.
 - Cleaned up information in some files.
 
-## [0.1.7] 4 Mar, 2025
+## [0.7.0] 4 Mar, 2025 (0.1.7)
 
 ### Added
 
@@ -58,7 +72,7 @@
 - Fixed and Updated Dependencies in requirements.txt due to a vulnerability warning.
 - Successfully fixed and colleted data using the new GUI.
 
-## [0.1.6] 3 Mar, 2025
+## [0.6.0] 3 Mar, 2025 (0.1.6)
 
 ### Added
 
@@ -75,7 +89,7 @@
 - Fixed the issue where the GUI_Predict.py was not working by removing the prediction functions from the GUI for now.
 - Fixed GUI application crash when taking measurements.
 
-## [0.1.5] 1 Mar, 2025
+## [0.5.0] 1 Mar, 2025 (0.1.5)
 
 ### Added
 
@@ -97,12 +111,17 @@
 - Project folder as it is using Impedance-main written by Keisuke.
 - Datacollection.docx, it is not supposed to be here.
 
-## [0.1.3] 27 Feb, 2025
+## [0.3.1] 27 Feb, 2025 (0.1.3)
+
+### Added
 
 - Entire New Impedance model training.
+
+### Changed
+
 - Modified the impedance model written by Keisuke.
 
-## [0.1.2] 26 Feb, 2025
+## [0.3.0] 26 Feb, 2025 (0.1.2)
 
 ### Added
 
@@ -114,7 +133,7 @@
 - Measurement unit details in the GUI.
 - Arduino Code files organized in a folder.
 
-## [0.1.1] 25 Feb, 2025
+## [0.2.0] 25 Feb, 2025 (0.1.1)
 
 - Added a PyQt6 GUI to the Auto Impedance Collection script
 
