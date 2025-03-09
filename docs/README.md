@@ -22,41 +22,18 @@ This repository contains the code and data for the speaker impedance research pr
 
 5. **Prediction Measurement App** - Standalone script for predicting speaker tube length from impedance measurements. The idea is that a measurement can be made and the length can be predicted immediately. See the [Prediction Measurement App](../Prediction_Measurement_App/README.md) for more details.
 
-6. **MATLAB Code** - MATLAB code for automated plotting of impedance data for visualization.
-
-## Key Features
-
-### Measurement Interface
-
-- Streamlined control panel with intuitive grouping
-- Real-time impedance plotting with dark theme
-- Environmental readings display (temperature, humidity)
-- Automated data collection with progress tracking
-
-### Prediction Interface
-
-- CSV file loading and management
-- Model type selection (DNet/CNet)
-- Speaker differentiation option
-- Confidence score display
-- Length prediction results
-
-### Data Collection
-
-- Automatic organization of data by speaker type and length
-- Environmental data logging with each measurement
-- Consistent CSV format for training and prediction
+6. **MATLAB Code** - MATLAB code for plotting the collected impedance data for visualization.
 
 ## Getting Started
 
 1. Clone this repository:
 
    ```bash
-   git clone https://github.com/yourusername/speaker_impedance.git
+   git clone https://github.com/ckyb63/speaker_impedance.git
    cd speaker_impedance
    ```
 
-2. Install required dependencies:
+2. Install required dependencies, using the requirements.txt file located in the docs folder:
 
    ```bash
    pip install -r requirements.txt
@@ -68,7 +45,11 @@ This repository contains the code and data for the speaker impedance research pr
    - Connect the Analog Discovery 2 device via USB
    - (Optional) Connect an Arduino with BME280 sensor to monitor environmental conditions
 
-5. Run either GUI application:
+5. Run the GUI application to make measurements:
+
+   ```bash
+   python Analog Discovery/Auto_Impedance_New_GUI_PyQt6.py
+   ```
 
 ## Data Collection Workflow
 
@@ -79,11 +60,13 @@ This repository contains the code and data for the speaker impedance research pr
 
 ## Troubleshooting
 
-- If the Analog Discovery is not detected, ensure WaveForms SDK is properly installed
-- For Arduino communication issues, verify the correct COM port is selected
+- If the Analog Discovery 2 is not detected, ensure WaveForms SDK is properly installed and the device is connected via USB.
+- For Arduino communication issues, verify the correct COM port is selected in the GUI.
 - For model loading errors, check the model file path and format
 
-For more detailed instructions, see the [changelog](CHANGELOG.md) for recent updates and changes.
+## Updates
+
+For more detailed updates, see the [changelog](CHANGELOG.md) for recent updates and changes.
 
 ## Contributors
 

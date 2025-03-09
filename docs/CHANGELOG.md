@@ -2,6 +2,12 @@
 
 ## Latest
 
+## [0.9.2] 8 Mar, 2025
+
+### Changed
+
+- Updated Readme file, and Requirements.txt file.
+
 ## [0.9.1] 7 Mar, 2025
 
 ### Changed
