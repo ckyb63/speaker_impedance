@@ -2,6 +2,12 @@
 
 ## Latest
 
+## [0.9.3] 12 Mar, 2025
+
+### Fixed
+
+- requirements.txt security update.
+
 ## [0.9.2] 8 Mar, 2025
 
 ### Changed
