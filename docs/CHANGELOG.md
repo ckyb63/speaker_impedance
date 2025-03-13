@@ -2,6 +2,20 @@
 
 ## Latest
 
+## [0.9.5] 13 Mar, 2025
+
+### Added
+
+- New Arduino code for reporting Temperature, Humidity, Pressure, and Decibel levels using the Arduino Nano 33 BLE Sense.
+
+### Changed
+
+- Reverted Arudino_Pa_Tp_Hu.ino to the previous version.
+
+### Notes
+
+- The Audio Levels are reported in raw RMS values, and attempted calibrated dBA values, it is not accurate but it will be accurate relative to the other values.
+
 ## [0.9.3] 12 Mar, 2025
 
 ### Fixed
