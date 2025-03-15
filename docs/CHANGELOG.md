@@ -2,6 +2,47 @@
 
 ## Latest
 
+## [0.10.0] 14 Mar, 2025
+
+### Added
+
+- Arduino code that utilizes the sensor suit on the Arduino Nano 33 BLE Sense.
+  - Now measures Temperature, Humidity, Pressure, and Audio Levels in Raw RMS values and dBA.
+- Several features and functions in the GUI.
+
+### Updated
+
+- [The GUI](/Analog%20Discovery/Auto_Impedance_New_GUI_PyQt6.py)
+  - Environmental Data
+    - Revamped the Environmental Section in the GUI.
+    - Added COM Port Selection for the Arduino in the GUI.
+      - It now automatically connects to the COM device if there is only one detected as avaliable.
+  - Added scrollbar to the control panel if the screen is short on space.
+  - Added a warning dialog if the Arduino is not connected.
+  - Allowed measurements to still continue without environmental data, which reverts to the previous GUI behavior.
+  - Reorganized the GUI for better readability.
+  - Added tabs to the GUI settings for better organization.
+    - Main and Advanced Settings.
+  - Improved the UI/UX of the GUI, styling.
+  - Added overall tooltips to the GUI for better user guidance.
+  - Added better status indicators and messages in the GUI status.
+  - Added Ctrl+S to start the measurement process.
+  - Added auto arduino connection if there is only one detected.
+
+### Fixed
+
+- Bad Qt imports.
+- Removed and fixed unecessary sys.exit() calls.
+
+### Changed
+
+- Updated the Readme.md
+  - Added Picture of the GUI.
+
+### Notes
+
+- The audio levels are reported in raw RMS values, and attempted calibrated dBA values, it is not accurate but it will be accurate relative to the other values.
+
 ## [0.9.5] 13 Mar, 2025
 
 ### Added

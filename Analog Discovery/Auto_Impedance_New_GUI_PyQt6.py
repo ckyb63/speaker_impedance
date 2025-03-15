@@ -24,9 +24,10 @@ from dwfconstants import *
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,
                            QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
                            QMessageBox, QWidget, QGridLayout, QGroupBox, QProgressBar,
-                           QSizePolicy, QCheckBox)
-from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtGui import QIcon
+                           QSizePolicy, QCheckBox, QTabWidget, QScrollArea,
+                           QStatusBar)
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
+from PyQt6.QtGui import QIcon, QKeySequence, QShortcut
 
 # Matplotlib imports
 import matplotlib.pyplot as plt
@@ -54,10 +55,10 @@ class MplCanvas(FigureCanvas):
 
 # Arduino communication thread
 class ArduinoMonitor(QThread):
-    data_signal = pyqtSignal(float, float)  # Temperature, Humidity
+    data_signal = pyqtSignal(float, float, float, float, float)  # Temperature, Humidity, Pressure, Raw Sound Level, Smoothed dBA
     error_signal = pyqtSignal(str)
     
-    def __init__(self, port='COM12', baud_rate=115200):
+    def __init__(self, port='COM8', baud_rate=115200):
         super().__init__()
         self.port = port
         self.baud_rate = baud_rate
@@ -65,6 +66,9 @@ class ArduinoMonitor(QThread):
         self.serial = None
         self.temperature = 25.0
         self.humidity = 50.0
+        self.pressure = 1013.25  # Standard atmospheric pressure
+        self.raw_sound_level = 0.0
+        self.smoothed_dba = 0.0
         
     def run(self):
         try:
@@ -76,14 +80,20 @@ class ArduinoMonitor(QThread):
                     try:
                         line = self.serial.readline().decode('utf-8').strip()
                         parts = line.split(',')
-                        if len(parts) >= 2:  # Changed to check for at least 2 parts
+                        if len(parts) >= 5:  # Check for all 5 values
                             temp = float(parts[0])
                             humidity = float(parts[1])
+                            pressure = float(parts[2])
+                            raw_sound = float(parts[3])
+                            smoothed_dba = float(parts[4])
                             
                             self.temperature = temp
                             self.humidity = humidity
+                            self.pressure = pressure
+                            self.raw_sound_level = raw_sound
+                            self.smoothed_dba = smoothed_dba
                             
-                            self.data_signal.emit(temp, humidity)
+                            self.data_signal.emit(temp, humidity, pressure, raw_sound, smoothed_dba)
                     except Exception as e:
                         self.error_signal.emit(f"Error parsing Arduino data: {str(e)}")
                 time.sleep(0.1)
@@ -94,7 +104,7 @@ class ArduinoMonitor(QThread):
                 self.serial.close()
     
     def get_latest_data(self):
-        return (self.temperature, self.humidity)
+        return (self.temperature, self.humidity, self.pressure, self.raw_sound_level, self.smoothed_dba)
                 
     def stop(self):
         self.running = False
@@ -134,14 +144,23 @@ class DataCollectionWorker(QThread):
         start = int(self.app.start_frequency_entry.text())
         stop = int(self.app.stop_frequency_entry.text())
         reference = int(self.app.reference_entry.text())
+        
+        # Check if Arduino monitor is available
+        arduino_available = hasattr(self.app, 'arduino_monitor') and self.app.arduino_monitor is not None
 
         # For loop through the specified number of runs
         for run in range(self.repetitions):
             self.progress_signal.emit(f"Starting run {run + 1} of {self.repetitions}")
             
-            # Get environmental data
-            temp, humidity = self.app.arduino_monitor.get_latest_data()
-            self.progress_signal.emit(f"Environmental data: {temp:.1f}°C, {humidity:.1f}%")
+            # Get initial environmental data for the run name/folder if available
+            if arduino_available and self.record_env_data:
+                temp, humidity, pressure, raw_sound, smoothed_dba = self.app.arduino_monitor.get_latest_data()
+                self.progress_signal.emit(f"Initial environmental data: {temp:.1f}°C, {humidity:.1f}%, {pressure:.2f} hPa, {raw_sound:.2f} RMS, {smoothed_dba:.2f} dBA")
+            else:
+                # Default environmental values if no Arduino
+                temp, humidity, pressure, raw_sound, smoothed_dba = 25.0, 50.0, 1013.25, 0.0, 0.0
+                if self.record_env_data:  # This should actually never happen as we set record_env_data to False if no Arduino
+                    self.progress_signal.emit("No environmental data available - Arduino not connected")
             
             # Configure the settings for impedance measurements
             self.app.dwf.FDwfAnalogImpedanceReset(hdwf)
@@ -168,13 +187,13 @@ class DataCollectionWorker(QThread):
             file_path = os.path.join(self.app.base_folder, file_name)
             with open(file_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                # Add environmental data to CSV header if enabled
+                # Add environmental data to CSV header if enabled - showing initial values
                 if self.record_env_data:
-                    writer.writerow([f"Temperature (°C): {temp:.2f}", f"Humidity (%): {humidity:.2f}"])
+                    writer.writerow([f"Initial Temperature (°C): {temp:.2f}", f"Initial Humidity (%): {humidity:.2f}", f"Initial Pressure (hPa): {pressure:.2f}", f"Initial Raw Sound Level (RMS): {raw_sound:.2f}", f"Initial Smoothed dBA: {smoothed_dba:.2f}"])
                 
                 # Update the header row to include environmental data columns if enabled
                 if self.record_env_data:
-                    writer.writerow(["Frequency (Hz)", "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)"])
+                    writer.writerow(["Frequency (Hz)", "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)", "Pressure (hPa)", "Raw Sound Level (RMS)", "Smoothed dBA"])
                 else:
                     writer.writerow(["Frequency (Hz)", "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", "Trace Xs (Ohm)"])
 
@@ -206,9 +225,14 @@ class DataCollectionWorker(QThread):
                     rgZ[i] = (resistance.value**2 + reactance.value**2)**0.5
                     rgTheta[i] = math.degrees(math.atan2(reactance.value, resistance.value))
 
-                    # Write data to CSV - include environmental data if enabled
-                    if self.record_env_data:
-                        writer.writerow([hz, rgTheta[i], rgZ[i], rgRs[i], rgXs[i], temp, humidity])
+                    # Get the latest environmental data for each measurement point if available
+                    if arduino_available and self.record_env_data:
+                        current_temp, current_humidity, current_pressure, current_raw_sound, current_smoothed_dba = self.app.arduino_monitor.get_latest_data()
+                        
+                        # Write data to CSV with current environmental values
+                        writer.writerow([hz, rgTheta[i], rgZ[i], rgRs[i], rgXs[i], 
+                                       current_temp, current_humidity, current_pressure, 
+                                       current_raw_sound, current_smoothed_dba])
                     else:
                         writer.writerow([hz, rgTheta[i], rgZ[i], rgRs[i], rgXs[i]])
                     
@@ -231,7 +255,7 @@ class DataCollectionWorker(QThread):
 class DataCollectionApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Earphones Impedance Data Collector")
+        self.setWindowTitle("Earphones Impedance Measurement - Analog Discovery 2")
         
         # Set the application icon
         self.setWindowIcon(QIcon("Analog Discovery/assets/speaker_icon.png"))
@@ -255,11 +279,8 @@ class DataCollectionApp(QMainWindow):
         self.main_layout.setSpacing(10)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
         
-        # Initialize Arduino connection
-        self.arduino_monitor = ArduinoMonitor(port='COM12')
-        self.arduino_monitor.data_signal.connect(self.update_environmental_data)
-        self.arduino_monitor.error_signal.connect(self.handle_arduino_error)
-        self.arduino_monitor.start()
+        # Arduino monitor will be initialized when the user selects a port
+        self.arduino_monitor = None
         
         # Create control panel group
         self.create_control_panel()
@@ -267,8 +288,34 @@ class DataCollectionApp(QMainWindow):
         # Create plot panel
         self.create_plot_panel()
         
+        # Create status bar
+        self.statusBar().setStyleSheet("""
+            QStatusBar {
+                background-color: #252525;
+                color: #ffffff;
+                border-top: 1px solid #3d3d3d;
+            }
+        """)
+        self.statusBar().showMessage("Ready - Press Ctrl+S to start data collection")
+        
         # Load DWF library
         self.load_dwf()
+        
+        # Initialize environmental data display with default values
+        self.update_environmental_data(25.0, 50.0, 1013.25, 0.0, 0.0)
+        self.update_progress("Please select a COM port and connect to Arduino")
+        
+        # Update the connection status text
+        if hasattr(self, 'connection_status'):
+            self.connection_status.setText("Not Connected")
+            self.connection_status.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            
+        # Add keyboard shortcut for starting data collection (Ctrl+S)
+        self.start_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.start_shortcut.activated.connect(self.start_data_collection)
+            
+        # Now that everything is initialized, refresh ports (and potentially auto-connect)
+        QTimer.singleShot(100, self.refresh_ports)
 
     def apply_dark_theme(self):
         """Apply dark theme to the application"""
@@ -374,8 +421,9 @@ class DataCollectionApp(QMainWindow):
         # Set a size policy that allows the control panel to have a minimum width
         self.control_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.control_group.setMinimumWidth(350)
-        self.control_group.setMaximumWidth(450)
+        self.control_group.setMaximumWidth(550)
         
+        # Main layout for the control panel
         self.input_layout = QVBoxLayout(self.control_group)
         self.input_layout.setSpacing(5)
         self.input_layout.setContentsMargins(10, 15, 10, 10)
@@ -387,23 +435,97 @@ class DataCollectionApp(QMainWindow):
                 background-color: #2ea043;
                 color: white;
                 font-size: 18px;
-                padding: 8px;
-                border-radius: 4px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 6px;
                 border: none;
+                margin: 5px 0;
             }
             QPushButton:hover {
                 background-color: #3fb950;
             }
+            QPushButton:pressed {
+                background-color: #238636;
+            }
+            QPushButton:disabled {
+                background-color: #444444;
+                color: #aaaaaa;
+            }
         """)
+        self.start_button.setToolTip("Start collecting impedance data with the current settings.\nMake sure Arduino is connected before starting.")
+        self.start_button.setMinimumHeight(50)
         self.start_button.clicked.connect(self.start_data_collection)
         self.input_layout.addWidget(self.start_button)
-
-        # Configuration section with reduced spacing
+        
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #3d3d3d;
+                background-color: #1e1e1e;
+            }
+            QTabBar::tab {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-bottom-color: #3d3d3d;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                padding: 5px 10px;
+                min-width: 80px;
+            }
+            QTabBar::tab:selected {
+                background-color: #3d3d3d;
+                border-bottom-color: #3d3d3d;
+            }
+            QTabBar::tab:!selected {
+                margin-top: 2px;
+            }
+        """)
+        
+        # Create the tabs
+        self.main_tab = QWidget()
+        self.advanced_tab = QWidget()
+        
+        # Create layouts for tabs
+        self.main_tab_layout = QVBoxLayout(self.main_tab)
+        self.main_tab_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for scroll area
+        self.advanced_tab_layout = QVBoxLayout(self.advanced_tab)
+        
+        # Add tabs to the tab widget
+        self.tab_widget.addTab(self.main_tab, "Main Settings")
+        self.tab_widget.addTab(self.advanced_tab, "Advanced Settings")
+        
+        # Add tab widget to main layout
+        self.input_layout.addWidget(self.tab_widget)
+        
+        # ---- MAIN TAB CONTENTS ----
+        # Add a scroll area to make the main tab scrollable
+        self.main_scroll_area = QScrollArea()
+        self.main_scroll_area.setWidgetResizable(True)
+        self.main_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.main_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.main_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Create a container widget for the main tab content
+        self.main_content_widget = QWidget()
+        self.main_content_layout = QVBoxLayout(self.main_content_widget)
+        self.main_content_layout.setSpacing(10)
+        
+        # Add the scroll area to the main tab layout
+        self.main_tab_layout.addWidget(self.main_scroll_area)
+        self.main_scroll_area.setWidget(self.main_content_widget)
+        
+        # Configuration section
         config_header = QLabel("Configuration")
         config_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
-        self.input_layout.addWidget(config_header)
+        self.main_content_layout.addWidget(config_header)
 
-        # Dropdowns with improved styling and reduced height
+        # Create a horizontal layout for the configuration elements
+        config_layout = QHBoxLayout()
+        config_layout.setSpacing(15)  # Add some spacing between the elements
+        
+        # Dropdowns and entry fields styling
         dropdown_style = """
             QComboBox { 
                 padding: 3px;
@@ -413,58 +535,7 @@ class DataCollectionApp(QMainWindow):
                 border: none;
             }
         """
-
-        self.types = ["A", "B", "C", "D"]
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(self.types)
-        self.type_combo.setStyleSheet(dropdown_style)
-        self.input_layout.addWidget(QLabel("Earphone Type:"))
-        self.input_layout.addWidget(self.type_combo)
-
-        self.lengths = [f"{i}" for i in range(5, 31, 3)] + ["9", "24", "39", "Open", "Blocked"]
-        self.length_combo = QComboBox()
-        self.length_combo.addItems(self.lengths)
-        self.length_combo.setStyleSheet(dropdown_style)
-        self.input_layout.addWidget(QLabel("Length (mm):"))
-        self.input_layout.addWidget(self.length_combo)
-
-        # Environmental readings section
-        env_header = QLabel("Environmental Readings")
-        env_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
-        self.input_layout.addWidget(env_header)
         
-        # Create a grid for environmental readings
-        env_grid = QGridLayout()
-        env_grid.setSpacing(5)
-        
-        # Temperature reading
-        temp_label = QLabel("Temperature:")
-        self.temp_value = QLabel("25.0 °C")
-        self.temp_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
-        env_grid.addWidget(temp_label, 0, 0)
-        env_grid.addWidget(self.temp_value, 0, 1)
-        
-        # Humidity reading
-        humidity_label = QLabel("Humidity:")
-        self.humidity_value = QLabel("50.0 %")
-        self.humidity_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
-        env_grid.addWidget(humidity_label, 1, 0)
-        env_grid.addWidget(self.humidity_value, 1, 1)
-        
-        # Add checkbox for recording environmental data
-        self.env_data_checkbox = QCheckBox("Record Environmental Data")
-        self.env_data_checkbox.setChecked(True)  # Enable by default
-        self.env_data_checkbox.setStyleSheet("color: #ffffff;")
-        env_grid.addWidget(self.env_data_checkbox, 2, 0, 1, 2)  # span 2 columns
-        
-        self.input_layout.addLayout(env_grid)
-
-        # Advanced settings section with reduced spacing
-        advanced_header = QLabel("Advanced Settings")
-        advanced_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
-        self.input_layout.addWidget(advanced_header)
-
-        # Entry fields with improved styling and reduced height
         entry_style = """
             QLineEdit {
                 padding: 3px;
@@ -473,12 +544,185 @@ class DataCollectionApp(QMainWindow):
             }
         """
 
-        # Repetitions (keep this one vertical as it's the main control)
+        # Type selection - create a container widget and layout
+        type_widget = QWidget()
+        type_layout = QVBoxLayout(type_widget)
+        type_layout.setSpacing(3)
+        type_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.types = ["A", "B", "C", "D"]
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(self.types)
+        self.type_combo.setStyleSheet(dropdown_style)
+        self.type_combo.setToolTip("Select the type of earphone being measured")
+        
+        type_label = QLabel("Earphone Type:")
+        type_layout.addWidget(type_label)
+        type_layout.addWidget(self.type_combo)
+        config_layout.addWidget(type_widget)
+
+        # Length selection - create a container widget and layout
+        length_widget = QWidget()
+        length_layout = QVBoxLayout(length_widget)
+        length_layout.setSpacing(3)
+        length_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.lengths = [f"{i}" for i in range(5, 31, 3)] + ["9", "24", "39", "Open", "Blocked"]
+        self.length_combo = QComboBox()
+        self.length_combo.addItems(self.lengths)
+        self.length_combo.setStyleSheet(dropdown_style)
+        self.length_combo.setToolTip("Select the length of the earphone tube in millimeters")
+        
+        length_label = QLabel("Length (mm):")
+        length_layout.addWidget(length_label)
+        length_layout.addWidget(self.length_combo)
+        config_layout.addWidget(length_widget)
+        
+        # Repetitions - create a container widget and layout
+        repetitions_widget = QWidget()
+        repetitions_layout = QVBoxLayout(repetitions_widget)
+        repetitions_layout.setSpacing(3)
+        repetitions_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.repetitions_entry = QLineEdit("100")
         self.repetitions_entry.setStyleSheet(entry_style)
-        self.input_layout.addWidget(QLabel("Number of Repetitions:"))
-        self.input_layout.addWidget(self.repetitions_entry)
-
+        self.repetitions_entry.setToolTip("Number of measurement runs to perform (each run measures the full frequency range)")
+        
+        repetitions_label = QLabel("Number of Repetitions:")
+        repetitions_layout.addWidget(repetitions_label)
+        repetitions_layout.addWidget(self.repetitions_entry)
+        config_layout.addWidget(repetitions_widget)
+        
+        # Add the config layout to the main content layout
+        self.main_content_layout.addLayout(config_layout)
+        
+        # Environmental readings section with improved vertical spacing
+        env_header = QLabel("Environmental Readings")
+        env_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 15px;")
+        self.main_content_layout.addWidget(env_header)
+        
+        # Create a group box for environmental readings to prevent vertical squishing
+        env_group = QGroupBox()
+        env_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                margin-top: 0px;
+                padding: 10px;
+                background-color: #252525;
+            }
+        """)
+        env_group.setMinimumHeight(200)  # Set minimum height to prevent squishing
+        
+        # Create a grid for environmental readings with more spacing
+        env_grid = QGridLayout(env_group)
+        env_grid.setSpacing(10)  # Increased spacing
+        env_grid.setContentsMargins(15, 10, 15, 10)  # Add some padding
+        
+        # Temperature reading
+        temp_label = QLabel("Temperature:")
+        temp_label.setMinimumHeight(24)  # Minimum height
+        self.temp_value = QLabel("25.0 °C")
+        self.temp_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
+        self.temp_value.setMinimumHeight(24)  # Minimum height
+        self.temp_value.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        env_grid.addWidget(temp_label, 0, 0)
+        env_grid.addWidget(self.temp_value, 0, 1)
+        
+        # Humidity reading
+        humidity_label = QLabel("Humidity:")
+        humidity_label.setMinimumHeight(24)  # Minimum height
+        self.humidity_value = QLabel("50.0 %")
+        self.humidity_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
+        self.humidity_value.setMinimumHeight(24)  # Minimum height
+        self.humidity_value.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        env_grid.addWidget(humidity_label, 1, 0)
+        env_grid.addWidget(self.humidity_value, 1, 1)
+        
+        # Pressure reading
+        pressure_label = QLabel("Pressure:")
+        pressure_label.setMinimumHeight(24)  # Minimum height
+        self.pressure_value = QLabel("1013.25 hPa")
+        self.pressure_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
+        self.pressure_value.setMinimumHeight(24)  # Minimum height
+        self.pressure_value.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        env_grid.addWidget(pressure_label, 2, 0)
+        env_grid.addWidget(self.pressure_value, 2, 1)
+        
+        # Raw Sound Level reading
+        raw_sound_label = QLabel("Raw Sound:")
+        raw_sound_label.setMinimumHeight(24)  # Minimum height
+        self.raw_sound_value = QLabel("0.0 RMS")
+        self.raw_sound_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
+        self.raw_sound_value.setMinimumHeight(24)  # Minimum height
+        self.raw_sound_value.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        env_grid.addWidget(raw_sound_label, 3, 0)
+        env_grid.addWidget(self.raw_sound_value, 3, 1)
+        
+        # Smoothed dBA reading
+        smoothed_dba_label = QLabel("Smoothed dBA:")
+        smoothed_dba_label.setMinimumHeight(24)  # Minimum height
+        self.smoothed_dba_value = QLabel("0.0 dBA")
+        self.smoothed_dba_value.setStyleSheet("color: #58a6ff; font-weight: bold;")
+        self.smoothed_dba_value.setMinimumHeight(24)  # Minimum height
+        self.smoothed_dba_value.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        env_grid.addWidget(smoothed_dba_label, 4, 0)
+        env_grid.addWidget(self.smoothed_dba_value, 4, 1)
+        
+        # Add checkbox for recording environmental data
+        self.env_data_checkbox = QCheckBox("Record Environmental Data")
+        self.env_data_checkbox.setChecked(True)  # Enable by default
+        self.env_data_checkbox.setStyleSheet("color: #ffffff;")
+        self.env_data_checkbox.setMinimumHeight(30)  # Minimum height
+        self.env_data_checkbox.setToolTip("When enabled, real-time environmental data (temperature, humidity, pressure, sound levels)\nwill be recorded for each frequency measurement point in the CSV output files.")
+        env_grid.addWidget(self.env_data_checkbox, 5, 0, 1, 2)  # span 2 columns
+        
+        self.main_content_layout.addWidget(env_group)
+        
+        # Add a spacer to push everything to the top of the main tab
+        self.main_content_layout.addStretch()
+        
+        # ---- ADVANCED TAB CONTENTS ----
+        # Arduino Connection Section
+        arduino_header = QLabel("Arduino Connection")
+        arduino_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        self.advanced_tab_layout.addWidget(arduino_header)
+        
+        # COM Port selection
+        self.port_layout = QHBoxLayout()
+        port_label = QLabel("COM Port:")
+        self.port_combo = QComboBox()
+        self.port_combo.setToolTip("Select the COM port where your Arduino is connected")
+        self.refresh_port_button = QPushButton("↻")
+        self.refresh_port_button.setToolTip("Refresh the list of available COM ports")
+        self.refresh_port_button.setMaximumWidth(30)
+        self.refresh_port_button.clicked.connect(self.refresh_ports)
+        
+        # Don't call refresh_ports here - we'll do it after full initialization
+        
+        self.port_layout.addWidget(port_label)
+        self.port_layout.addWidget(self.port_combo, 1)  # Give it more space
+        self.port_layout.addWidget(self.refresh_port_button)
+        
+        self.reconnect_button = QPushButton("Connect")
+        self.reconnect_button.setToolTip("Connect to the Arduino on the selected COM port")
+        self.reconnect_button.clicked.connect(self.reconnect_arduino)
+        
+        self.advanced_tab_layout.addLayout(self.port_layout)
+        self.advanced_tab_layout.addWidget(self.reconnect_button)
+        
+        # Connection status label
+        self.connection_status = QLabel("Not Connected")
+        self.connection_status.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self.connection_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.connection_status.setMinimumHeight(25)
+        self.advanced_tab_layout.addWidget(self.connection_status)
+        
+        # Measurement Settings section
+        measurement_header = QLabel("Measurement Settings")
+        measurement_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 15px;")
+        self.advanced_tab_layout.addWidget(measurement_header)
+        
         # Create horizontal layouts for paired settings
         freq_layout = QHBoxLayout()
         freq_layout.setSpacing(10)
@@ -490,6 +734,7 @@ class DataCollectionApp(QMainWindow):
         start_freq_layout.setContentsMargins(0, 0, 0, 0)
         self.start_frequency_entry = QLineEdit("20")
         self.start_frequency_entry.setStyleSheet(entry_style)
+        self.start_frequency_entry.setToolTip("Starting frequency for the impedance sweep (Hz)")
         start_freq_layout.addWidget(QLabel("Start Frequency (Hz):"))
         start_freq_layout.addWidget(self.start_frequency_entry)
         freq_layout.addWidget(start_freq_widget)
@@ -501,11 +746,12 @@ class DataCollectionApp(QMainWindow):
         stop_freq_layout.setContentsMargins(0, 0, 0, 0)
         self.stop_frequency_entry = QLineEdit("20000")
         self.stop_frequency_entry.setStyleSheet(entry_style)
+        self.stop_frequency_entry.setToolTip("Ending frequency for the impedance sweep (Hz)")
         stop_freq_layout.addWidget(QLabel("Stop Frequency (Hz):"))
         stop_freq_layout.addWidget(self.stop_frequency_entry)
         freq_layout.addWidget(stop_freq_widget)
         
-        self.input_layout.addLayout(freq_layout)
+        self.advanced_tab_layout.addLayout(freq_layout)
         
         # Reference and Steps in another horizontal layout
         ref_steps_layout = QHBoxLayout()
@@ -518,6 +764,7 @@ class DataCollectionApp(QMainWindow):
         ref_layout.setContentsMargins(0, 0, 0, 0)
         self.reference_entry = QLineEdit("100")
         self.reference_entry.setStyleSheet(entry_style)
+        self.reference_entry.setToolTip("Reference resistance value in Ohms for impedance measurement")
         ref_layout.addWidget(QLabel("Reference in Ohms:"))
         ref_layout.addWidget(self.reference_entry)
         ref_steps_layout.addWidget(ref_widget)
@@ -529,15 +776,19 @@ class DataCollectionApp(QMainWindow):
         steps_layout.setContentsMargins(0, 0, 0, 0)
         self.step_entry = QLineEdit("501")
         self.step_entry.setStyleSheet(entry_style)
+        self.step_entry.setToolTip("Number of frequency points to measure between start and stop frequencies")
         steps_layout.addWidget(QLabel("STEPS:"))
         steps_layout.addWidget(self.step_entry)
         ref_steps_layout.addWidget(steps_widget)
         
-        self.input_layout.addLayout(ref_steps_layout)
+        self.advanced_tab_layout.addLayout(ref_steps_layout)
         
-        # Status section with reduced height
+        # Add a spacer to the advanced tab to push everything to the top
+        self.advanced_tab_layout.addStretch()
+        
+        # Status section below the tabs
         status_header = QLabel("Status")
-        status_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        status_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 15px;")
         self.input_layout.addWidget(status_header)
 
         # Progress label
@@ -592,7 +843,7 @@ class DataCollectionApp(QMainWindow):
         """)
         self.input_layout.addWidget(self.progress_text)
 
-        # Add control group to the main layout with 1:2 ratio with plot
+        # Add control group to the main layout
         self.main_layout.addWidget(self.control_group, stretch=1)
 
     def create_plot_panel(self):
@@ -611,14 +862,14 @@ class DataCollectionApp(QMainWindow):
         
         # Set size policy to allow the plot to expand and maintain aspect ratio
         self.plot_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.plot_group.setMinimumWidth(600)
+        self.plot_group.setMinimumWidth(350)  # Reduced from 600 to 450
         
         plot_layout = QVBoxLayout(self.plot_group)
         plot_layout.setSpacing(5)
         plot_layout.setContentsMargins(10, 15, 10, 10)
 
         # Create the matplotlib canvas with dark theme - using square dimensions
-        self.canvas = MplCanvas(self, width=8, height=8, dpi=100)
+        self.canvas = MplCanvas(self, width=4, height=4, dpi=100)  # Reduced from 8x8 to 6x6
         self.canvas.ax.set_title('Impedance Magnitude |Z| vs Frequency')
         self.canvas.ax.set_xlabel('Frequency (Hz)')
         self.canvas.ax.set_ylabel('Impedance (Ohms)')
@@ -627,13 +878,16 @@ class DataCollectionApp(QMainWindow):
         
         plot_layout.addWidget(self.canvas)
         
-        # Add plot group to the main layout - now use stretch factor 3 to give more space
-        self.main_layout.addWidget(self.plot_group, stretch=3)
+        # Add plot group to the main layout - with reduced stretch factor
+        self.main_layout.addWidget(self.plot_group, stretch=1)  # Reduced from 3 to 2
 
-    def update_environmental_data(self, temperature, humidity):
+    def update_environmental_data(self, temperature, humidity, pressure, raw_sound, smoothed_dba):
         """Update the environmental data labels with values from Arduino"""
         self.temp_value.setText(f"{temperature:.1f} °C")
         self.humidity_value.setText(f"{humidity:.1f} %")
+        self.pressure_value.setText(f"{pressure:.2f} hPa")
+        self.raw_sound_value.setText(f"{raw_sound:.2f} RMS")
+        self.smoothed_dba_value.setText(f"{smoothed_dba:.2f} dBA")
         
     def handle_arduino_error(self, error_message):
         """Handle Arduino connection errors"""
@@ -641,8 +895,18 @@ class DataCollectionApp(QMainWindow):
         # Update the environmental labels to show error state
         self.temp_value.setText("Error")
         self.humidity_value.setText("Error")
+        self.pressure_value.setText("Error")
+        self.raw_sound_value.setText("Error")
+        self.smoothed_dba_value.setText("Error")
         self.temp_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
         self.humidity_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self.pressure_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self.raw_sound_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self.smoothed_dba_value.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        
+        # Update connection status
+        self.connection_status.setText("Connection Failed")
+        self.connection_status.setStyleSheet("color: #e74c3c; font-weight: bold;")
 
     def load_dwf(self):
         """Load the appropriate DWF library based on platform"""
@@ -715,6 +979,56 @@ class DataCollectionApp(QMainWindow):
 
     def start_data_collection(self):
         """Start the data collection process in a separate thread"""
+        # Check if Arduino is connected - now shows a warning instead of preventing measurements
+        arduino_connected = self.arduino_monitor is not None
+        
+        if not arduino_connected:
+            # Create a custom dialog with styled buttons
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Arduino Not Connected")
+            msg_box.setText("Arduino is not connected. Environmental data will not be recorded.\n\nDo you want to continue without environmental data?")
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            
+            # Create custom styled buttons
+            yes_button = msg_box.addButton('Yes', QMessageBox.ButtonRole.YesRole)
+            no_button = msg_box.addButton('No', QMessageBox.ButtonRole.NoRole)
+            
+            # Style the buttons
+            yes_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2ea043;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    border: none;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #3fb950;
+                }
+            """)
+            
+            no_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    border: none;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #c0392b;
+                }
+            """)
+            
+            msg_box.setDefaultButton(no_button)
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == no_button:
+                self.statusBar().showMessage("Measurement cancelled - Connect Arduino for environmental data")
+                return
+            
         # Get values from input fields
         selected_type = self.type_combo.currentText()
         selected_length = self.length_combo.currentText()
@@ -738,15 +1052,16 @@ class DataCollectionApp(QMainWindow):
                 
         except ValueError as e:
             QMessageBox.critical(self, "Input Error", str(e))
+            self.statusBar().showMessage(f"Error: {str(e)}")
             return
         
         # Folder selection and creation
         folder_name = f"{selected_type}_{selected_length}"
         
-        # If environmental data recording is enabled, append temperature and humidity to folder name
-        if self.env_data_checkbox.isChecked():
+        # If environmental data recording is enabled and Arduino is connected, append temp/humidity to folder name
+        if self.env_data_checkbox.isChecked() and arduino_connected:
             # Get current environmental data
-            temp, humidity = self.arduino_monitor.get_latest_data()
+            temp, humidity, pressure, raw_sound, smoothed_dba = self.arduino_monitor.get_latest_data()
             folder_name = f"{folder_name}_T{temp:.1f}C_H{humidity:.1f}pct"
             
         self.base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Collected_Data", folder_name)
@@ -762,25 +1077,38 @@ class DataCollectionApp(QMainWindow):
                 background-color: #f0883e;
                 color: white;
                 font-size: 18px;
-                padding: 8px;
-                border-radius: 4px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 6px;
                 border: none;
+                margin: 5px 0;
             }
         """)
         self.start_button.setEnabled(False)
         
+        # Update status bar
+        status_msg = f"Running {repetitions} measurements for Type {selected_type}, Length {selected_length}"
+        if not arduino_connected:
+            status_msg += " (without environmental data)"
+        status_msg += " - Please wait..."
+        self.statusBar().showMessage(status_msg)
+        
         # Reset progress bar
         self.progress_bar.setValue(0)
         
+        # Determine if we should record environmental data (needs Arduino connected and checkbox enabled)
+        record_env_data = self.env_data_checkbox.isChecked() and arduino_connected
+        
         # Start data collection in a worker thread
-        self.worker = DataCollectionWorker(self, folder_name, repetitions, self.env_data_checkbox.isChecked())
+        self.worker = DataCollectionWorker(self, folder_name, repetitions, record_env_data)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.plot_signal.connect(self.update_plot)
         self.worker.progress_bar_signal.connect(self.update_progress_bar)
         self.worker.finished_signal.connect(self.collection_finished)
         self.worker.start()
         
-        self.update_progress(f"Starting data collection for {selected_type}_{selected_length} with {repetitions} repetitions")
+        env_data_status = "with" if record_env_data else "without"
+        self.update_progress(f"Starting data collection for {selected_type}_{selected_length} {env_data_status} environmental data, {repetitions} repetitions")
 
     def collection_finished(self):
         """Update UI after data collection is complete"""
@@ -791,18 +1119,32 @@ class DataCollectionApp(QMainWindow):
                 background-color: #2ea043;
                 color: white;
                 font-size: 18px;
-                padding: 8px;
-                border-radius: 4px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 6px;
                 border: none;
+                margin: 5px 0;
             }
             QPushButton:hover {
                 background-color: #3fb950;
             }
+            QPushButton:pressed {
+                background-color: #238636;
+            }
+            QPushButton:disabled {
+                background-color: #444444;
+                color: #aaaaaa;
+            }
         """)
         self.start_button.setEnabled(True)
         
-        # Show the export dataset button if environmental data recording was enabled
-        if hasattr(self, 'worker') and self.worker.record_env_data:
+        # Update status bar
+        self.statusBar().showMessage("Data collection complete - Ready for next measurement")
+        
+        # Show the export dataset button if environmental data recording was enabled AND data was collected
+        arduino_was_connected = hasattr(self, 'arduino_monitor') and self.arduino_monitor is not None
+        
+        if hasattr(self, 'worker') and self.worker.record_env_data and arduino_was_connected:
             if not hasattr(self, 'export_dataset_button'):
                 self.export_dataset_button = QPushButton("Export ML Training Dataset")
                 self.export_dataset_button.setStyleSheet("""
@@ -821,11 +1163,18 @@ class DataCollectionApp(QMainWindow):
                 self.export_dataset_button.clicked.connect(self.export_ml_dataset)
                 self.input_layout.addWidget(self.export_dataset_button)
             self.export_dataset_button.setVisible(True)
+        elif hasattr(self, 'export_dataset_button'):
+            # Hide the export button if no environmental data was recorded
+            self.export_dataset_button.setVisible(False)
         
         # Show completion message
-        QMessageBox.information(self, "Data Collection Complete", 
-                              "All measurement runs have been completed successfully!\n\n"
-                              "The data has been saved to CSV files in the specified folder.")
+        message = "All measurement runs have been completed successfully!\n\nThe data has been saved to CSV files in the specified folder."
+        
+        # Add note about environmental data if needed
+        if not arduino_was_connected:
+            message += "\n\nNote: No environmental data was recorded as Arduino was not connected."
+            
+        QMessageBox.information(self, "Data Collection Complete", message)
         
         # Play a sound to notify the user
         try:
@@ -836,7 +1185,7 @@ class DataCollectionApp(QMainWindow):
             pass  # Fallback silently if sound cannot be played
         
         self.update_progress("Data collection completed.")
-        
+
     def export_ml_dataset(self):
         """Export a consolidated dataset for machine learning training"""
         try:
@@ -906,7 +1255,8 @@ class DataCollectionApp(QMainWindow):
                 writer.writerow([
                     "Type", "Length", "Run", "Frequency (Hz)", 
                     "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", 
-                    "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)"
+                    "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)",
+                    "Pressure (hPa)", "Raw Sound Level (RMS)", "Smoothed dBA"
                 ])
                 
                 # Process each CSV file
@@ -931,16 +1281,21 @@ class DataCollectionApp(QMainWindow):
                                 
                             # Extract data
                             if has_env_data:
-                                freq, theta, z, rs, xs, temp, humidity = row
+                                # Now each row has its own environmental measurements
+                                freq, theta, z, rs, xs, temp, humidity, pressure, raw_sound, smoothed_dba = row
                             else:
                                 freq, theta, z, rs, xs = row
                                 temp = "N/A"
                                 humidity = "N/A"
+                                pressure = "N/A"
+                                raw_sound = "N/A"
+                                smoothed_dba = "N/A"
                                 
                             # Write consolidated row
                             writer.writerow([
                                 earphone_type, earphone_length, run_number,
-                                freq, theta, z, rs, xs, temp, humidity
+                                freq, theta, z, rs, xs, temp, humidity,
+                                pressure, raw_sound, smoothed_dba
                             ])
             
             self.update_progress(f"ML training dataset exported to: {earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
@@ -972,30 +1327,167 @@ class DataCollectionApp(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event"""
         # Stop Arduino monitoring thread before closing
-        if hasattr(self, 'arduino_monitor'):
+        if hasattr(self, 'arduino_monitor') and self.arduino_monitor is not None:
             self.arduino_monitor.stop()
             
         if hasattr(self, 'worker') and self.worker.isRunning():
-            reply = QMessageBox.question(self, 'Exit', 
-                                      'Data collection is still in progress. Are you sure you want to exit?',
-                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-                                      QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.Yes:
+            # Create message box with styled buttons
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle('Exit')
+            msg_box.setText('Data collection is still in progress. Are you sure you want to exit?')
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            
+            # Create custom styled buttons
+            yes_button = msg_box.addButton('Yes', QMessageBox.ButtonRole.YesRole)
+            no_button = msg_box.addButton('No', QMessageBox.ButtonRole.NoRole)
+            
+            # Style the buttons
+            yes_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    border: none;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #c0392b;
+                }
+            """)
+            
+            no_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2ea043;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    border: none;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #3fb950;
+                }
+            """)
+            
+            msg_box.setDefaultButton(no_button)
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == yes_button:
                 self.worker.terminate()  # Force terminate the worker thread
                 event.accept()
-                sys.exit(0)
             else:
                 event.ignore()
         else:
-            reply = QMessageBox.question(self, 'Exit', 
-                                      'Are you sure you want to exit the application?',
-                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-                                      QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.Yes:
+            # Create message box with styled buttons
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle('Exit')
+            msg_box.setText('Are you sure you want to exit the application?')
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            
+            # Create custom styled buttons
+            yes_button = msg_box.addButton('Yes', QMessageBox.ButtonRole.YesRole)
+            no_button = msg_box.addButton('No', QMessageBox.ButtonRole.NoRole)
+            
+            # Style the buttons
+            yes_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    border: none;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #c0392b;
+                }
+            """)
+            
+            no_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2ea043;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    border: none;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #3fb950;
+                }
+            """)
+            
+            msg_box.setDefaultButton(no_button)
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == yes_button:
                 event.accept()
-                sys.exit(0)
             else:
                 event.ignore()
+
+    def refresh_ports(self):
+        """Refresh the available COM ports list"""
+        self.port_combo.clear()
+        ports = serial.tools.list_ports.comports()
+        available_ports = []
+        
+        for port in ports:
+            self.port_combo.addItem(f"{port.device} - {port.description}")
+            available_ports.append(port.device)
+        
+        # If no ports found, add a message
+        if self.port_combo.count() == 0:
+            self.port_combo.addItem("No COM ports found")
+            self.connection_status.setText("No devices available")
+            self.connection_status.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        # Auto-connect if only one port is detected
+        elif len(available_ports) == 1:
+            # Select the only available port
+            self.port_combo.setCurrentIndex(0)
+            # Auto-connect to it
+            self.update_progress(f"Auto-connecting to the only available port: {available_ports[0]}")
+            self.reconnect_arduino()
+            
+    def reconnect_arduino(self):
+        """Reconnect to Arduino with selected COM port"""
+        # Check if we have ports available
+        if self.port_combo.currentText() == "No COM ports found":
+            self.update_progress("Error: No COM ports available")
+            self.connection_status.setText("No devices available")
+            self.connection_status.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            return
+            
+        # Extract the COM port from the selected item
+        port = self.port_combo.currentText().split(" - ")[0]
+        
+        # Stop current monitor if it exists and is running
+        if hasattr(self, 'arduino_monitor') and self.arduino_monitor is not None:
+            self.arduino_monitor.stop()
+            
+        # Update progress
+        self.update_progress(f"Connecting to Arduino on {port}...")
+        self.connection_status.setText(f"Connecting to {port}...")
+        self.connection_status.setStyleSheet("color: #f39c12; font-weight: bold;") # Orange for connecting
+        
+        # Create new monitor
+        self.arduino_monitor = ArduinoMonitor(port=port)
+        self.arduino_monitor.data_signal.connect(self.update_environmental_data)
+        self.arduino_monitor.error_signal.connect(self.handle_arduino_error)
+        self.arduino_monitor.start()
+        
+        # Update button text temporarily
+        self.reconnect_button.setText("Connecting...")
+        self.reconnect_button.setEnabled(False)
+        
+        # Re-enable after short delay
+        def enable_button():
+            self.reconnect_button.setText("Connect")
+            self.reconnect_button.setEnabled(True)
+            self.connection_status.setText(f"Connected to {port}")
+            self.connection_status.setStyleSheet("color: #2ecc71; font-weight: bold;") # Green for connected
+            
+        QTimer.singleShot(2000, enable_button)
 
 # Main function that starts the program
 if __name__ == "__main__":

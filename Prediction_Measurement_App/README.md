@@ -32,6 +32,7 @@ A modern, dark-themed application suite that combines impedance measurement usin
 1. Ensure you have Python 3.10+ installed on your system
 
 2. Install the required Python packages:
+
    ```bash
    pip install -r ../requirements.txt
    ```

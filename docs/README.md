@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Latest Version](https://img.shields.io/badge/Latest-v0.9.5-blue.svg)](CHANGELOG.md/#latest)
+[![Latest Version](https://img.shields.io/badge/Latest-v0.10.0-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.12.9-blue.svg?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3129/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg?logo=qt&logoColor=white)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg?logo=digilent&logoColor=white)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
@@ -62,14 +62,19 @@ This repository contains the code and data for the speaker impedance research pr
 
 - If the Analog Discovery 2 is not detected, ensure WaveForms SDK is properly installed and the device is connected via USB.
 - For Arduino communication issues, verify the correct COM port is selected in the GUI.
-- For model loading errors, check the model file path and format
 
 ## Updates
 
 For more detailed updates, see the [changelog](CHANGELOG.md) for recent updates and changes.
 
+## Screenshots
+
+Main GUI Window - Main Settings
+![Main GUI](./Pics/0.10.0_1.png "Main GUI Window - Main Settings")
+
+Main GUI Window - Advanced Settings
+![Main GUI](./Pics/0.10.0_2.png "Main GUI Window - Advanced Settings")
+
 ## Contributors
 
 Max Chen
-
-Keisuke Nakamura
