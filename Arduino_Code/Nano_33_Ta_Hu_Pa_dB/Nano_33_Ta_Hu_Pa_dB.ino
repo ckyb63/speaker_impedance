@@ -1,37 +1,35 @@
-// Arduino Nano 33 BLE Sense - Temperature, Humidity, and Sound Level Monitor
-// This code reads temperature, humidity, and sound level data from the Nano 33 BLE Sense
+// Arduino Nano 33 BLE Sense - Temperature, Humidity, Pressure, and Sound Level Monitor
+// This code reads temperature, humidity, pressure, and sound level data from the Nano 33 BLE Sense
 // and outputs it in a comma-separated format compatible with the PyQt6 GUI.
-// Format: temperature,humidity,rawSoundLevel,dBA
+// Format: temperature,humidity,pressure,rawSoundLevel,smoothedDBA
+// Max Chen - v25.03.15
 
 #include <Arduino_HTS221.h>   // For temperature and humidity
-#include <Arduino_LPS22HB.h> // For pressure
-#include <PDM.h>              // For the digital microphone
+#include <Arduino_LPS22HB.h>  // For pressure
+#include <PDM.h>              // For the microphone
 
-// Buffer to read samples into, each sample is 16-bits
-short sampleBuffer[512];  // Increased buffer size for better averaging
+// Buffer to read samples into, each sample is 16-bits, increase it for better averaging
+short sampleBuffer[512];
 
 // Number of samples read
 volatile int samplesRead;
 
 // Variables for sound level calculation
 float rawSoundLevel = 0;
-float dBA = 0;        // A-weighted sound level
-float pressure = 0;   // Pressure in hPa
+float dBA = 0;          // A-weighted sound level
+float pressure = 0;     // Pressure in hPa
 
 // Multi-segment logarithmic curve calibration parameters
-// Four-point calibration based on measured values
-// Point 1: RMS 46 corresponds to 36 dBA (quiet room)
-// Point 2: RMS 69 corresponds to 53.2 dBA (low-medium level)
-// Point 3: RMS 171 corresponds to 79 dBA (medium level)
-// Point 4: RMS 500 corresponds to 95 dBA (high level)
+// Four-point calibration based on measured values using a Tenma Sound Level Meter to calibrate
+// The measured RMS values to a dBA value.
 const float CAL_POINT1_RMS = 45.0;
 const float CAL_POINT1_DBA = 35.0;
 const float CAL_POINT2_RMS = 60.0;
 const float CAL_POINT2_DBA = 50.0;
 const float CAL_POINT3_RMS = 190.0;  
 const float CAL_POINT3_DBA = 70.0;
-const float CAL_POINT4_RMS = 1000.0;  // New higher calibration point  
-const float CAL_POINT4_DBA = 100.0;   // New higher calibration point
+const float CAL_POINT4_RMS = 1000.0;
+const float CAL_POINT4_DBA = 100.0;
 
 // Pre-calculated slopes and intercepts for each segment
 // For segment 1 (between points 1 and 2)
@@ -46,33 +44,34 @@ const float INTERCEPT2 = CAL_POINT2_DBA - SLOPE2 * log10(CAL_POINT2_RMS);
 const float SLOPE3 = (CAL_POINT4_DBA - CAL_POINT3_DBA) / (log10(CAL_POINT4_RMS) - log10(CAL_POINT3_RMS));
 const float INTERCEPT3 = CAL_POINT3_DBA - SLOPE3 * log10(CAL_POINT3_RMS);
 
-// No room offset needed since we're calibrating directly to the reference sound meter
+// No longer used. 3.15.25
 const float SILENT_ROOM_OFFSET = 0.0;
 
-// Sensor offset corrections
-const float TEMP_OFFSET = -4.0;  // Temperature offset correction (-2.5°C)
-const float HUMIDITY_OFFSET = 3.5;  // Humidity offset correction (-5%) - adjust as needed
+// Sensor offset corrections for temperature and humidity
+const float TEMP_OFFSET = -4.0;
+const float HUMIDITY_OFFSET = 3.5;
 
 // Timing variables
 unsigned long lastSensorUpdate = 0;
-const unsigned long SENSOR_UPDATE_INTERVAL = 1000;  // Update sensors every 1000ms
+const unsigned long SENSOR_UPDATE_INTERVAL = 1000; // in mS
 
-// Improved running average for sound levels - increased sample count
-const int SOUND_SAMPLES = 35;  // Increased from 20 to 30 for more stability
+// Improved running average for sound levels
+const int SOUND_SAMPLES = 35;
 float soundLevels[SOUND_SAMPLES];
 int soundSampleIndex = 0;
 float soundAverage = 0;
 
-// Exponential smoothing factor (alpha)
+// Exponential smoothing factor (alpha) - Reduce current reading affect.
 // Higher values (closer to 1) give more weight to recent readings
 // Lower values (closer to 0) give more weight to past readings
-const float ALPHA = 0.1;  // Reduced from 0.15 to 0.1 for smoother transitions
+const float ALPHA = 0.1;
 
 // Values for median filtering to remove outliers
 const int MEDIAN_SAMPLES = 9;
 float recentValues[MEDIAN_SAMPLES];
 int medianIndex = 0;
 
+// Smoothed dBA value
 float smoothedDBA = 0;
 
 // Variables for LED debouncing
@@ -80,8 +79,8 @@ unsigned long lastLEDChange = 0;
 const unsigned long LED_DEBOUNCE_TIME = 500;  // Minimum time between LED state changes (ms)
 int currentLEDState = 0;  // 0 = green, 1 = blue, 2 = red
 
-// Sample accumulation
-const int MIN_SAMPLES_BEFORE_CALCULATION = 5;  // Increased from 3 to 5
+// Sample accumulation for averaging
+const int MIN_SAMPLES_BEFORE_CALCULATION = 5;
 int sampleBatchCount = 0;
 float accumulatedRMS = 0;
 
@@ -134,9 +133,10 @@ float calculateRMS(short* samples, int numSamples) {
   // Calculate RMS (Root Mean Square)
   float sum = 0;
   for (int i = 0; i < numSamples; i++) {
+
     // Apply a moderate noise floor to filter out microphone self-noise
     float sample = abs((float)samples[i]);
-    if (sample < 25) {  // Decreased from 35 to 20 - to capture more ambient noise
+    if (sample < 25) {
       sample = 0;
     }
     sum += sample * sample;
@@ -148,7 +148,7 @@ float calculateRMS(short* samples, int numSamples) {
 float convertToDBA(float rms) {
   float result = 0;
   
-  if (rms <= 8.0) {  // Reduced from 10.0 to 5.0
+  if (rms <= 8.0) {
     return 0.0;  // Below threshold of measurement
   } 
   else if (rms < CAL_POINT1_RMS) {
@@ -181,18 +181,13 @@ void updateLED(float dBA) {
   int newLEDState;
   
   // Determine the appropriate LED state - updated thresholds to match professional scale
-  if (dBA >= 85) {
-    newLEDState = 2;  // Red - high level
-  } else if (dBA >= 65) {
-    newLEDState = 1;  // Blue - medium level
-  } else {
-    newLEDState = 0;  // Green - low level
-  }
+  if (dBA >= 85) newLEDState = 2;  // Red - high level
+  else if (dBA >= 65) newLEDState = 1;  // Blue - medium level
+  else newLEDState = 0;  // Green - low level
   
   // Only change LED if state is different and debounce time has passed
-  if (newLEDState != currentLEDState && 
-      (currentMillis - lastLEDChange > LED_DEBOUNCE_TIME)) {
-    
+  if (newLEDState != currentLEDState && (currentMillis - lastLEDChange > LED_DEBOUNCE_TIME)) 
+  {
     // Turn off all LEDs first (they are active LOW)
     digitalWrite(LEDR, HIGH);
     digitalWrite(LEDG, HIGH);
@@ -265,8 +260,8 @@ void setup() {
     recentValues[i] = 0;
   }
   
-  Serial.println("Arduino Nano 33 BLE Sense - Temperature, Humidity, and Sound Level Monitor");
-  Serial.println("Data format: temperature,humidity,rawSoundLevel,dBA,smoothedDBA");
+  Serial.println("Arduino Nano 33 BLE Sense - Temperature, Humidity, Pressure, and Sound Level Monitor");
+  Serial.println("Data format: temperature,humidity,pressure,rawSoundLevel,smoothedDBA");
   delay(1000);
 }
 

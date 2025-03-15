@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Latest Version](https://img.shields.io/badge/Latest-v0.10.0-blue.svg)](CHANGELOG.md/#latest)
+[![Latest Version](https://img.shields.io/badge/Latest-v0.10.1-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.12.9-blue.svg?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3129/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg?logo=qt&logoColor=white)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg?logo=digilent&logoColor=white)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
@@ -69,11 +69,17 @@ For more detailed updates, see the [changelog](CHANGELOG.md) for recent updates 
 
 ## Screenshots
 
-Main GUI Window - Main Settings
-![Main GUI](./Pics/0.10.0_1.png "Main GUI Window - Main Settings")
+<details>
+  <summary>Main GUI Window - Main Settings</summary>
 
-Main GUI Window - Advanced Settings
-![Main GUI](./Pics/0.10.0_2.png "Main GUI Window - Advanced Settings")
+  ![Main GUI Window - Main Settings](./Pics/0.10.0_1.png "Main GUI Window - Main Settings")
+</details>
+
+<details>
+  <summary>Main GUI Window - Advanced Settings</summary>
+
+  ![Main GUI Window - Advanced Settings](./Pics/0.10.0_2.png "Main GUI Window - Advanced Settings")
+</details>
 
 ## Contributors
 

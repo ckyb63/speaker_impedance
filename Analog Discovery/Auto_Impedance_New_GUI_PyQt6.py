@@ -1,6 +1,6 @@
 """
 Name: New Auto Impedance Measurement with PyQt6
-Author: Max Chen v25.03.06
+Author: Max Chen v25.03.15
 Description: 
 This is a GUI script written with PyQt6 to automate and speed up earphone impedance data collection with the Analog Discovery 2 from Digilent
 Using the API from the DIGILENT WaveForms software, this is a custom script to directly use the existing impedance measuring function in the software.
@@ -260,11 +260,11 @@ class DataCollectionApp(QMainWindow):
         # Set the application icon
         self.setWindowIcon(QIcon("Analog Discovery/assets/speaker_icon.png"))
         
-        # Set fixed initial size with square-ish aspect ratio
+        # Set fixed initial size
         self.setMinimumSize(1000, 800)
         self.resize(1200, 900)
         
-        # Instead of maximized, start with a square window
+        # Uncomment to auto start maximized
         # self.showMaximized()
         
         # Set dark theme
@@ -862,14 +862,14 @@ class DataCollectionApp(QMainWindow):
         
         # Set size policy to allow the plot to expand and maintain aspect ratio
         self.plot_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.plot_group.setMinimumWidth(350)  # Reduced from 600 to 450
+        self.plot_group.setMinimumWidth(350)
         
         plot_layout = QVBoxLayout(self.plot_group)
         plot_layout.setSpacing(5)
         plot_layout.setContentsMargins(10, 15, 10, 10)
 
         # Create the matplotlib canvas with dark theme - using square dimensions
-        self.canvas = MplCanvas(self, width=4, height=4, dpi=100)  # Reduced from 8x8 to 6x6
+        self.canvas = MplCanvas(self, width=4, height=4, dpi=100)
         self.canvas.ax.set_title('Impedance Magnitude |Z| vs Frequency')
         self.canvas.ax.set_xlabel('Frequency (Hz)')
         self.canvas.ax.set_ylabel('Impedance (Ohms)')
@@ -879,7 +879,7 @@ class DataCollectionApp(QMainWindow):
         plot_layout.addWidget(self.canvas)
         
         # Add plot group to the main layout - with reduced stretch factor
-        self.main_layout.addWidget(self.plot_group, stretch=1)  # Reduced from 3 to 2
+        self.main_layout.addWidget(self.plot_group, stretch=1)
 
     def update_environmental_data(self, temperature, humidity, pressure, raw_sound, smoothed_dba):
         """Update the environmental data labels with values from Arduino"""
@@ -969,8 +969,6 @@ class DataCollectionApp(QMainWindow):
         self.canvas.ax.legend(loc='best', frameon=True)
         
         # Set square aspect ratio for the plot
-        # For logarithmic scales, 'equal' doesn't work directly, so we need to handle differently
-        # We'll set the aspect ratio to be 'auto' but ensure the box is square
         self.canvas.ax.set_box_aspect(1.0)
         
         # Update the canvas

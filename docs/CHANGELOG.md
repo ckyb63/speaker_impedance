@@ -2,6 +2,13 @@
 
 ## Latest
 
+## [0.10.1] 15 Mar, 2025
+
+### Updated
+
+- Updated and Corrected some comments in both the Arduino and GUI code.
+- Updated readme screenshot formatting.
+
 ## [0.10.0] 14 Mar, 2025
 
 ### Added
