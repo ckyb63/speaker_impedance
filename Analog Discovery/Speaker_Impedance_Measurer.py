@@ -33,19 +33,32 @@ from PyQt6.QtGui import QIcon, QKeySequence, QShortcut
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
-# Keras imports for model loading and prediction
-print("Attempting to import Keras...")  # Debug line
+# TensorFlow imports for model loading and prediction
+print("Attempting to import TensorFlow...")  # Debug line
 try:
-    import torch  # Ensure PyTorch is imported first
-    import keras
-    keras.config.set_backend("torch")  # Explicitly set PyTorch as the backend
-    print(f"Successfully imported Keras version: {keras.__version__} with PyTorch backend")
-    KERAS_AVAILABLE = True
+    import tensorflow as tf
+    print(f"Successfully imported TensorFlow version: {tf.__version__}")
+    print(f"TensorFlow is using backend: {tf.config.list_physical_devices()}")
+    TENSORFLOW_AVAILABLE = True
 except ImportError as e:
-    print(f"Failed to import Keras or PyTorch: {str(e)}")
-    print("Please ensure both keras and torch are installed:")
-    print("pip install keras torch")
-    KERAS_AVAILABLE = False
+    print(f"Failed to import TensorFlow: {str(e)}")
+    print("\nDetailed error information:")
+    print(f"Python version: {sys.version}")
+    print(f"Python executable: {sys.executable}")
+    print("\nPlease ensure TensorFlow is installed in your virtual environment:")
+    print("1. Activate your virtual environment")
+    print("2. Run: pip install tensorflow==2.19")
+    print("3. If the error persists, try:")
+    print("   - pip uninstall tensorflow")
+    print("   - pip cache purge")
+    print("   - pip install tensorflow==2.19")
+    TENSORFLOW_AVAILABLE = False
+except Exception as e:
+    print(f"Unexpected error while importing TensorFlow: {str(e)}")
+    print("\nDetailed error information:")
+    print(f"Python version: {sys.version}")
+    print(f"Python executable: {sys.executable}")
+    TENSORFLOW_AVAILABLE = False
 
 # NumPy for data processing
 import numpy as np
@@ -588,12 +601,12 @@ class DataCollectionApp(QMainWindow):
         prediction_scroll.setWidget(prediction_content)
         self.prediction_tab_layout.addWidget(prediction_scroll)
         
-        # Disable prediction features if Keras is not available
-        if not KERAS_AVAILABLE:
-            self.model_path_label.setText("Keras not installed")
+        # Disable prediction features if TensorFlow is not available
+        if not TENSORFLOW_AVAILABLE:
+            self.model_path_label.setText("TensorFlow not installed")
             self.measure_button.setEnabled(False)
             select_model_button.setEnabled(False)
-            self.prediction_result_label.setText("Please install Keras to enable predictions")
+            self.prediction_result_label.setText("Please install TensorFlow to enable predictions")
             
     def select_model_file(self):
         """Open file dialog to select a model file"""
@@ -612,9 +625,9 @@ class DataCollectionApp(QMainWindow):
         
         if file_path:
             try:
-                # Load the model using Keras
+                # Load the model using TensorFlow
                 print(f"Attempting to load model from: {file_path}")  # Debug line
-                self.model = keras.models.load_model(file_path)  # Updated to use keras.models directly
+                self.model = tf.keras.models.load_model(file_path)
                 print("Model loaded successfully")  # Debug line
                 self.model_path = file_path
                 self.model_path_label.setText(os.path.basename(file_path))
@@ -704,7 +717,7 @@ class DataCollectionApp(QMainWindow):
             if not hasattr(self, 'model') or self.model is None:
                 raise Exception("No model loaded. Please select and load a model first.")
             
-            # Make prediction using Keras model
+            # Make prediction using TensorFlow model
             prediction = self.model.predict(X.reshape(1, -1), verbose=0)  # Set verbose=0 to suppress progress bar
             
             # Process prediction result (assuming regression model predicting length)

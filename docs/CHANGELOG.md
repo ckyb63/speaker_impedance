@@ -2,6 +2,17 @@
 
 ## Latest
 
+## [0.11.1] 24 Mar, 2025
+
+### Fixed
+
+- Requirement package versions.
+
+### Notes
+
+- Downgraded to Python 3.10.11 venv to work with TensorFlow.
+  - Python 3.10.11 only works with TensorFlow 2.15.0 and not the newer 2.19.0
+
 ## [0.11.0] 23 Mar, 2025
 
 ### Added
