@@ -1,6 +1,6 @@
 """
-Name: New Auto Impedance Measurement with PyQt6
-Author: Max Chen v25.03.15
+Name: Speaker Impedance Measurer
+Author: Max Chen
 Description: 
 This is a GUI script written with PyQt6 to automate and speed up earphone impedance data collection with the Analog Discovery 2 from Digilent
 Using the API from the DIGILENT WaveForms software, this is a custom script to directly use the existing impedance measuring function in the software.
@@ -25,13 +25,30 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                            QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
                            QMessageBox, QWidget, QGridLayout, QGroupBox, QProgressBar,
                            QSizePolicy, QCheckBox, QTabWidget, QScrollArea,
-                           QStatusBar)
+                           QStatusBar, QFileDialog)
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
 from PyQt6.QtGui import QIcon, QKeySequence, QShortcut
 
 # Matplotlib imports
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+
+# Keras imports for model loading and prediction
+print("Attempting to import Keras...")  # Debug line
+try:
+    import torch  # Ensure PyTorch is imported first
+    import keras
+    keras.config.set_backend("torch")  # Explicitly set PyTorch as the backend
+    print(f"Successfully imported Keras version: {keras.__version__} with PyTorch backend")
+    KERAS_AVAILABLE = True
+except ImportError as e:
+    print(f"Failed to import Keras or PyTorch: {str(e)}")
+    print("Please ensure both keras and torch are installed:")
+    print("pip install keras torch")
+    KERAS_AVAILABLE = False
+
+# NumPy for data processing
+import numpy as np
 
 # Matplotlib canvas class
 class MplCanvas(FigureCanvas):
@@ -264,8 +281,14 @@ class DataCollectionApp(QMainWindow):
         self.setMinimumSize(1000, 800)
         self.resize(1200, 900)
         
+        # Initialize prediction-related variables
+        self.model = None
+        self.model_path = None
+        self.last_measurement = None
+        self.prediction_result = None
+        
         # Uncomment to auto start maximized
-        # self.showMaximized()
+        self.showMaximized()
         
         # Set dark theme
         self.apply_dark_theme()
@@ -427,35 +450,6 @@ class DataCollectionApp(QMainWindow):
         self.input_layout = QVBoxLayout(self.control_group)
         self.input_layout.setSpacing(5)
         self.input_layout.setContentsMargins(10, 15, 10, 10)
-
-        # Start Button with improved styling
-        self.start_button = QPushButton("Start Data Collection")
-        self.start_button.setStyleSheet("""
-            QPushButton {
-                background-color: #2ea043;
-                color: white;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px;
-                border-radius: 6px;
-                border: none;
-                margin: 5px 0;
-            }
-            QPushButton:hover {
-                background-color: #3fb950;
-            }
-            QPushButton:pressed {
-                background-color: #238636;
-            }
-            QPushButton:disabled {
-                background-color: #444444;
-                color: #aaaaaa;
-            }
-        """)
-        self.start_button.setToolTip("Start collecting impedance data with the current settings.\nMake sure Arduino is connected before starting.")
-        self.start_button.setMinimumHeight(50)
-        self.start_button.clicked.connect(self.start_data_collection)
-        self.input_layout.addWidget(self.start_button)
         
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -486,20 +480,254 @@ class DataCollectionApp(QMainWindow):
         # Create the tabs
         self.main_tab = QWidget()
         self.advanced_tab = QWidget()
+        self.prediction_tab = QWidget()  # Add prediction tab
         
         # Create layouts for tabs
         self.main_tab_layout = QVBoxLayout(self.main_tab)
-        self.main_tab_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for scroll area
+        self.main_tab_layout.setContentsMargins(0, 0, 0, 0)
         self.advanced_tab_layout = QVBoxLayout(self.advanced_tab)
+        self.prediction_tab_layout = QVBoxLayout(self.prediction_tab)  # Add prediction tab layout
         
         # Add tabs to the tab widget
         self.tab_widget.addTab(self.main_tab, "Main Settings")
         self.tab_widget.addTab(self.advanced_tab, "Advanced Settings")
+        self.tab_widget.addTab(self.prediction_tab, "Prediction")  # Add prediction tab
         
         # Add tab widget to main layout
         self.input_layout.addWidget(self.tab_widget)
         
-        # ---- MAIN TAB CONTENTS ----
+        # Create contents for each tab
+        self.create_main_tab_contents()
+        self.create_advanced_tab_contents()
+        self.create_prediction_tab()  # Create prediction tab contents
+
+    def create_prediction_tab(self):
+        """Create the prediction tab with model loading and prediction controls"""
+        # Add a scroll area
+        prediction_scroll = QScrollArea()
+        prediction_scroll.setWidgetResizable(True)
+        prediction_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        prediction_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        prediction_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Create a container widget for the prediction tab content
+        prediction_content = QWidget()
+        prediction_layout = QVBoxLayout(prediction_content)
+        prediction_layout.setSpacing(10)
+        
+        # Model Selection Section
+        model_header = QLabel("Model Selection")
+        model_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")
+        prediction_layout.addWidget(model_header)
+        
+        # Model file selection
+        model_file_layout = QHBoxLayout()
+        self.model_path_label = QLabel("No model selected")
+        self.model_path_label.setStyleSheet("color: #e74c3c;")
+        
+        select_model_button = QPushButton("Select Model")
+        select_model_button.clicked.connect(self.select_model_file)
+        select_model_button.setMaximumWidth(120)
+        
+        model_file_layout.addWidget(self.model_path_label)
+        model_file_layout.addWidget(select_model_button)
+        prediction_layout.addLayout(model_file_layout)
+        
+        # Speaker Type Selection
+        type_layout = QHBoxLayout()
+        type_label = QLabel("Speaker Type:")
+        self.prediction_type_combo = QComboBox()
+        self.prediction_type_combo.addItems(self.types)
+        type_layout.addWidget(type_label)
+        type_layout.addWidget(self.prediction_type_combo)
+        prediction_layout.addLayout(type_layout)
+        
+        # Single Measurement Button
+        self.measure_button = QPushButton("Take Single Measurement")
+        self.measure_button.clicked.connect(self.take_single_measurement)
+        self.measure_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2ea043;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 6px;
+                margin: 10px 0;
+            }
+            QPushButton:hover {
+                background-color: #3fb950;
+            }
+        """)
+        prediction_layout.addWidget(self.measure_button)
+        
+        # Prediction Results Section
+        results_header = QLabel("Prediction Results")
+        results_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 15px;")
+        prediction_layout.addWidget(results_header)
+        
+        # Results display
+        self.prediction_result_label = QLabel("No prediction available")
+        self.prediction_result_label.setStyleSheet("""
+            QLabel {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                padding: 10px;
+                border-radius: 5px;
+                font-size: 14px;
+                min-height: 40px;
+            }
+        """)
+        self.prediction_result_label.setWordWrap(True)
+        prediction_layout.addWidget(self.prediction_result_label)
+        
+        # Add a spacer at the bottom
+        prediction_layout.addStretch()
+        
+        # Set the scroll area widget
+        prediction_scroll.setWidget(prediction_content)
+        self.prediction_tab_layout.addWidget(prediction_scroll)
+        
+        # Disable prediction features if Keras is not available
+        if not KERAS_AVAILABLE:
+            self.model_path_label.setText("Keras not installed")
+            self.measure_button.setEnabled(False)
+            select_model_button.setEnabled(False)
+            self.prediction_result_label.setText("Please install Keras to enable predictions")
+            
+    def select_model_file(self):
+        """Open file dialog to select a model file"""
+        # Set the default directory to the 'model' folder in the same directory as the script
+        default_model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
+        if not os.path.exists(default_model_dir):
+            default_model_dir = os.path.dirname(os.path.abspath(__file__))
+            
+        file_filter = "Model Files (*.h5 *.keras);;All Files (*.*)"
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Model File",
+            default_model_dir,  # Use the default model directory
+            file_filter
+        )
+        
+        if file_path:
+            try:
+                # Load the model using Keras
+                print(f"Attempting to load model from: {file_path}")  # Debug line
+                self.model = keras.models.load_model(file_path)  # Updated to use keras.models directly
+                print("Model loaded successfully")  # Debug line
+                self.model_path = file_path
+                self.model_path_label.setText(os.path.basename(file_path))
+                self.model_path_label.setStyleSheet("color: #2ecc71;")
+                self.update_progress(f"Model loaded successfully: {os.path.basename(file_path)}")
+            except Exception as e:
+                print(f"Error loading model: {str(e)}")  # Debug line
+                self.model = None
+                self.model_path = None
+                self.model_path_label.setText("Error loading model")
+                self.model_path_label.setStyleSheet("color: #e74c3c;")
+                self.update_progress(f"Error loading model: {str(e)}")
+                QMessageBox.critical(self, "Model Loading Error", f"Failed to load model: {str(e)}")
+                
+    def take_single_measurement(self):
+        """Take a single measurement for prediction"""
+        if not self.model:
+            QMessageBox.warning(self, "No Model", "Please select a model file first.")
+            return
+            
+        # Get selected speaker type
+        selected_type = self.prediction_type_combo.currentText()
+        
+        try:
+            # Configure measurement parameters
+            start_freq = int(self.start_frequency_entry.text())
+            stop_freq = int(self.stop_frequency_entry.text())
+            steps = int(self.step_entry.text())
+            reference = int(self.reference_entry.text())
+            
+            # Create a worker for single measurement
+            self.measure_button.setEnabled(False)
+            self.measure_button.setText("Measuring...")
+            
+            # Create and start the worker thread
+            self.single_measurement_worker = DataCollectionWorker(
+                self,
+                f"single_measurement_{selected_type}",
+                1,  # One repetition
+                False  # Don't record environmental data for prediction
+            )
+            
+            self.single_measurement_worker.progress_signal.connect(self.update_progress)
+            self.single_measurement_worker.plot_signal.connect(self.update_plot)
+            self.single_measurement_worker.finished_signal.connect(self.process_single_measurement)
+            self.single_measurement_worker.start()
+            
+        except ValueError as e:
+            QMessageBox.critical(self, "Input Error", str(e))
+            self.measure_button.setEnabled(True)
+            self.measure_button.setText("Take Single Measurement")
+            
+    def process_single_measurement(self):
+        """Process the single measurement and make a prediction"""
+        try:
+            # Re-enable the measure button
+            self.measure_button.setEnabled(True)
+            self.measure_button.setText("Take Single Measurement")
+            
+            # Get the measurement data from the last saved file
+            measurement_folder = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "Collected_Data",
+                f"single_measurement_{self.prediction_type_combo.currentText()}"
+            )
+            
+            # Find the most recent CSV file
+            csv_files = [f for f in os.listdir(measurement_folder) if f.endswith('.csv')]
+            if not csv_files:
+                raise Exception("No measurement data found")
+                
+            latest_file = os.path.join(measurement_folder, sorted(csv_files)[-1])
+            
+            # Read and process the data
+            data = []
+            with open(latest_file, 'r') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                for row in reader:
+                    freq, theta, z, rs, xs = row[:5]
+                    data.append([float(z)])  # Using only impedance magnitude for now
+                    
+            # Prepare data for prediction
+            X = np.array(data)
+            
+            # Check if model is loaded
+            if not hasattr(self, 'model') or self.model is None:
+                raise Exception("No model loaded. Please select and load a model first.")
+            
+            # Make prediction using Keras model
+            prediction = self.model.predict(X.reshape(1, -1), verbose=0)  # Set verbose=0 to suppress progress bar
+            
+            # Process prediction result (assuming regression model predicting length)
+            predicted_length = float(prediction[0])
+            
+            # Update the result label
+            self.prediction_result_label.setText(
+                f"Predicted Length: {predicted_length:.1f} mm\n"
+                f"Speaker Type: {self.prediction_type_combo.currentText()}"
+            )
+            self.prediction_result_label.setStyleSheet("color: #2ecc71; font-weight: bold;")
+            
+            # Update progress
+            self.update_progress(f"Prediction complete: {predicted_length:.1f} mm")
+            
+        except Exception as e:
+            self.prediction_result_label.setText(f"Prediction Error: {str(e)}")
+            self.prediction_result_label.setStyleSheet("color: #e74c3c;")
+            self.update_progress(f"Prediction error: {str(e)}")
+            QMessageBox.critical(self, "Prediction Error", f"Failed to make prediction: {str(e)}")
+
+    def create_main_tab_contents(self):
+        """Create the main tab contents"""
         # Add a scroll area to make the main tab scrollable
         self.main_scroll_area = QScrollArea()
         self.main_scroll_area.setWidgetResizable(True)
@@ -511,6 +739,35 @@ class DataCollectionApp(QMainWindow):
         self.main_content_widget = QWidget()
         self.main_content_layout = QVBoxLayout(self.main_content_widget)
         self.main_content_layout.setSpacing(10)
+        
+        # Start Button with improved styling
+        self.start_button = QPushButton("Start Data Collection")
+        self.start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2ea043;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 6px;
+                border: none;
+                margin: 5px 0;
+            }
+            QPushButton:hover {
+                background-color: #3fb950;
+            }
+            QPushButton:pressed {
+                background-color: #238636;
+            }
+            QPushButton:disabled {
+                background-color: #444444;
+                color: #aaaaaa;
+            }
+        """)
+        self.start_button.setToolTip("Start collecting impedance data with the current settings.\nMake sure Arduino is connected before starting.")
+        self.start_button.setMinimumHeight(50)
+        self.start_button.clicked.connect(self.start_data_collection)
+        self.main_content_layout.addWidget(self.start_button)
         
         # Add the scroll area to the main tab layout
         self.main_tab_layout.addWidget(self.main_scroll_area)
@@ -682,7 +939,21 @@ class DataCollectionApp(QMainWindow):
         # Add a spacer to push everything to the top of the main tab
         self.main_content_layout.addStretch()
         
-        # ---- ADVANCED TAB CONTENTS ----
+    def create_advanced_tab_contents(self):
+        """Create the advanced tab contents"""
+        # Define styles
+        entry_style = """
+            QLineEdit {
+                padding: 3px;
+                max-height: 24px;
+                margin: 0px;
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+            }
+        """
+        
         # Arduino Connection Section
         arduino_header = QLabel("Arduino Connection")
         arduino_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 5px;")

@@ -2,6 +2,21 @@
 
 ## Latest
 
+## [0.11.0] 23 Mar, 2025
+
+### Added
+
+- Prediction Tab in the main pyqt6 GUI.
+  - It will run measurement once with a specified speaker type, and then make a prediction using a loaded model (.h5 or .keras model file).
+
+### Changed
+
+- Renamed the Auto_Impedance_New_GUI_PyQt6.py to Speaker_Impedance_Measurer.py to better represent the name of the application.
+
+### Notes
+
+- Initial tried using Keras and PyTorch as the handeler for prediction function, but will later downgrade Python to 3.11 Venv so that TensorFlow can be used in the prediction tab.
+
 ## [0.10.1] 15 Mar, 2025
 
 ### Updated
