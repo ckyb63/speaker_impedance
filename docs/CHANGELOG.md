@@ -1,6 +1,35 @@
 # Change log
 
+## Upcoming
+
+- The prediction tab to preload the model file from the models folder.
+
 ## Latest
+
+## [0.12.0] 24 Mar, 2025
+
+### Added
+
+- The export ML Dataset button is now always shown. It is now able to export the combined collected dataset with or without environmental data.
+  - Button will be green if environmental data is present.
+  - Button will be blue if environmental data is not present.
+
+### Fixed
+
+- requirements.txt tensorflow version mismatch.
+  - tensorflow 2.18.0 for use with Python 3.10.11
+    - tensorflow is 2.18 instead of 2.19 due to the model being trained with 2.18.
+- .gitignore updated to properly ignore certain files.
+- With tensorflow fixed, the GUI is now able to load the .h5 model file for prediction.
+
+### Removed
+
+- Prediction Measurement Folder module, it is now integrated into the main application.
+- Impedance-main Folder module, it is supposed to be in another repository.
+
+### Updated
+
+- Readme.md updated with new information to reflect the changes.
 
 ## [0.11.1] 24 Mar, 2025
 
@@ -10,7 +39,7 @@
 
 ### Notes
 
-- Downgraded to Python 3.10.11 venv to work with TensorFlow.
+- Downgraded to Python 3.10.11 venv from 3.12.9 to work with TensorFlow.
   - Python 3.10.11 only works with TensorFlow 2.15.0 and not the newer 2.19.0
 
 ## [0.11.0] 23 Mar, 2025
@@ -45,7 +74,7 @@
 
 ### Updated
 
-- [The GUI](/Analog%20Discovery/Auto_Impedance_New_GUI_PyQt6.py)
+- [The GUI](/Analog%20Discovery/Speaker_Impedance_Measurer.py)
   - Environmental Data
     - Revamped the Environmental Section in the GUI.
     - Added COM Port Selection for the Arduino in the GUI.

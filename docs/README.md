@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Latest Version](https://img.shields.io/badge/Latest-v0.11.0-blue.svg)](CHANGELOG.md/#latest)
+[![Latest Version](https://img.shields.io/badge/Latest-v0.12.0-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.10.11-blue.svg?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-31011/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg?logo=qt&logoColor=white)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg?logo=digilent&logoColor=white)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
@@ -10,19 +10,16 @@
 
 This repository contains the code and data for the speaker impedance research project. The following are the main components of the project:
 
-1. **Analog Discovery** - The device of choice for this project is the Analog Discovery 2. This contains Automated impedance measurement application developed using PyQt6 with the WaveForms SDK.
-   - `Speaker_Impedance_Measurer.py`: The latest newly developed GUI for automated impedance data collection.
+- **Analog Discovery** - The device of choice for this project is the Analog Discovery 2. This contains Automated impedance measurement application developed using PyQt6 with the WaveForms SDK.
+   - `Speaker_Impedance_Measurer.py`: The latest GUI for automated impedance data collection.
+     - The main application also includes a prediction tab for predicting speaker tube length from impedance measurement using a trained model.
    - Older versions of the GUI are located in the `Older` folder. The older GUI was developed using tkinter, with an identical application developed using PyQt6.
 
-2. **Tympan** - Working with the Tympan library, this module is developed to allow the impedance measurement process to be done on a Tympan with the audio hat.
+- **Tympan** - Working with the Tympan library, this module is developed to allow the impedance measurement process to be done on a Tympan with the audio hat.
 
-3. **Arduino Code** - Environmental monitoring system that reads temperature, and humiditydata from the testing enclosure. The data is displayed in real-time in the GUIs and recorded in the measurement CSV files.
+- **Arduino Code** - Environmental monitoring system that reads temperature, and humiditydata from the testing enclosure. The data is displayed in real-time in the GUIs and recorded in the measurement CSV files.
 
-4. **Impedance Main** - AI model for predicting speaker tube length from impedance measurements, with support for different model architectures (DNet/CNet) and speaker differentiation. See the [Impedance Main](../Impedance-main/README.md) for more details.
-
-5. **Prediction Measurement App** - Standalone script for predicting speaker tube length from impedance measurements. The idea is that a measurement can be made and the length can be predicted immediately. See the [Prediction Measurement App](../Prediction_Measurement_App/README.md) for more details.
-
-6. **MATLAB Code** - MATLAB code for plotting the collected impedance data for visualization.
+- **MATLAB Code** - MATLAB code for plotting the collected impedance data for visualization.
 
 ## Getting Started
 
@@ -39,11 +36,12 @@ This repository contains the code and data for the speaker impedance research pr
    pip install -r requirements.txt
    ```
 
-3. Install the WaveForms SDK from Digilent's website
+3. Install the [WaveForms SDK](https://digilent.com/reference/software/waveforms/waveforms-sdk/start) from Digilent's website
 
 4. Connect your hardware:
    - Connect the Analog Discovery 2 device via USB
-   - (Optional) Connect an Arduino with BME280 sensor to monitor environmental conditions
+   - (Optional) Connect an Arduino Nano 33 Sense loaded with `Nano_33_Ta_Hu_Pa.ino` to monitor environmental conditions (temperature, humidity, pressure, and sound level)
+     - For the project, the .ino file was uploaded using the Arduino IDE, make sure select the correct board and port as well as having the necessary libraries installed.
 
 5. Run the GUI application to make measurements:
 
@@ -53,14 +51,18 @@ This repository contains the code and data for the speaker impedance research pr
 
 ## Data Collection Workflow
 
-1. Configure measurement settings (speaker type, length, frequency range) or keep it on default
-2. Connect the speaker to the Analog Discovery
-3. Start measurement
-4. Review collected data
+1. Set up the testing environment/enclosure.
+2. Configure measurement settings in application.
+    - Select the speaker type and length.
+3. Connect the speaker to the Analog Discovery
+4. If Arduino is connected, the environmental data will be displayed in the GUI, and checkbox can be selected to record the data in the CSV file.  
+5. Start measurement
+6. Decide if a combined CSV file is needed, if so click on the "Export ML Dataset" button.
+7. Review collected data
 
 ## Troubleshooting
 
-- If the Analog Discovery 2 is not detected, ensure WaveForms SDK is properly installed and the device is connected via USB.
+- If the Analog Discovery 2 is not detected, ensure WaveForms SDK is properly installed and the device is connected via USB by checking the device manager.
 - For Arduino communication issues, verify the correct COM port is selected in the GUI.
 
 ## Updates

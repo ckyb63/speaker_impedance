@@ -324,6 +324,33 @@ class DataCollectionApp(QMainWindow):
         # Create plot panel
         self.create_plot_panel()
         
+        # Create export dataset button
+        self.export_dataset_button = QPushButton("Export ML Training Dataset")
+        self.export_dataset_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2c2c7c;
+                color: white;
+                font-size: 14px;
+                padding: 6px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton[env_data="true"] {
+                background-color: #2ea043;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #3b3b9c;
+            }
+            QPushButton[env_data="true"]:hover {
+                background-color: #3fb950;
+            }
+        """)
+        self.export_dataset_button.clicked.connect(self.export_ml_dataset)
+        self.export_dataset_button.setProperty("env_data", "false")
+        self.export_dataset_button.setEnabled(True)
+        self.input_layout.addWidget(self.export_dataset_button)
+        
         # Create status bar
         self.statusBar().setStyleSheet("""
             QStatusBar {
@@ -1423,31 +1450,12 @@ class DataCollectionApp(QMainWindow):
         # Update status bar
         self.statusBar().showMessage("Data collection complete - Ready for next measurement")
         
-        # Show the export dataset button if environmental data recording was enabled AND data was collected
+        # Enable/disable export button based on environmental data availability
         arduino_was_connected = hasattr(self, 'arduino_monitor') and self.arduino_monitor is not None
+        has_env_data = hasattr(self, 'worker') and self.worker.record_env_data and arduino_was_connected
         
-        if hasattr(self, 'worker') and self.worker.record_env_data and arduino_was_connected:
-            if not hasattr(self, 'export_dataset_button'):
-                self.export_dataset_button = QPushButton("Export ML Training Dataset")
-                self.export_dataset_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #2c2c7c;
-                        color: white;
-                        font-size: 14px;
-                        padding: 6px;
-                        border-radius: 4px;
-                        border: none;
-                    }
-                    QPushButton:hover {
-                        background-color: #3b3b9c;
-                    }
-                """)
-                self.export_dataset_button.clicked.connect(self.export_ml_dataset)
-                self.input_layout.addWidget(self.export_dataset_button)
-            self.export_dataset_button.setVisible(True)
-        elif hasattr(self, 'export_dataset_button'):
-            # Hide the export button if no environmental data was recorded
-            self.export_dataset_button.setVisible(False)
+        # Update export button state
+        self.export_dataset_button.setProperty("env_data", "true" if has_env_data else "false")
         
         # Show completion message
         message = "All measurement runs have been completed successfully!\n\nThe data has been saved to CSV files in the specified folder."
@@ -1494,8 +1502,12 @@ class DataCollectionApp(QMainWindow):
                 earphone_type = "unknown"
                 earphone_length = "unknown"
                 
-            # Create the output file name based on type, length, temperature, and humidity
-            output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
+            # Create the output file name based on type and length
+            has_env_data = self.export_dataset_button.property("env_data") == "true"
+            if has_env_data:
+                output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
+            else:
+                output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_NoEnv_All.csv")
             
             # Check if file already exists
             file_exists = os.path.exists(output_file)
@@ -1534,12 +1546,21 @@ class DataCollectionApp(QMainWindow):
             # Write header and data to the consolidated file
             with open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
                 writer = csv.writer(outfile)
-                writer.writerow([
-                    "Type", "Length", "Run", "Frequency (Hz)", 
-                    "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", 
-                    "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)",
-                    "Pressure (hPa)", "Raw Sound Level (RMS)", "Smoothed dBA"
-                ])
+                
+                # Write appropriate header based on whether we have environmental data
+                if has_env_data:
+                    writer.writerow([
+                        "Type", "Length", "Run", "Frequency (Hz)", 
+                        "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", 
+                        "Trace Xs (Ohm)", "Temperature (°C)", "Humidity (%)",
+                        "Pressure (hPa)", "Raw Sound Level (RMS)", "Smoothed dBA"
+                    ])
+                else:
+                    writer.writerow([
+                        "Type", "Length", "Run", "Frequency (Hz)", 
+                        "Trace θ (deg)", "Trace |Z| (Ohm)", "Trace Rs (Ohm)", 
+                        "Trace Xs (Ohm)"
+                    ])
                 
                 # Process each CSV file
                 for i, file_name in enumerate(csv_files):
@@ -1554,7 +1575,7 @@ class DataCollectionApp(QMainWindow):
                         header_rows = 2 if "Temperature" in rows[0][0] else 1
                         
                         # Check if this file has environmental data
-                        has_env_data = len(rows[header_rows]) > 5
+                        has_file_env_data = len(rows[header_rows]) > 5
                         
                         # Process data rows
                         for row in rows[header_rows:]:
@@ -1562,31 +1583,30 @@ class DataCollectionApp(QMainWindow):
                                 continue
                                 
                             # Extract data
-                            if has_env_data:
+                            if has_file_env_data and has_env_data:
                                 # Now each row has its own environmental measurements
                                 freq, theta, z, rs, xs, temp, humidity, pressure, raw_sound, smoothed_dba = row
+                                # Write consolidated row with environmental data
+                                writer.writerow([
+                                    earphone_type, earphone_length, run_number,
+                                    freq, theta, z, rs, xs, temp, humidity,
+                                    pressure, raw_sound, smoothed_dba
+                                ])
                             else:
-                                freq, theta, z, rs, xs = row
-                                temp = "N/A"
-                                humidity = "N/A"
-                                pressure = "N/A"
-                                raw_sound = "N/A"
-                                smoothed_dba = "N/A"
-                                
-                            # Write consolidated row
-                            writer.writerow([
-                                earphone_type, earphone_length, run_number,
-                                freq, theta, z, rs, xs, temp, humidity,
-                                pressure, raw_sound, smoothed_dba
-                            ])
+                                # Write consolidated row without environmental data
+                                freq, theta, z, rs, xs = row[:5]  # Only take first 5 columns
+                                writer.writerow([
+                                    earphone_type, earphone_length, run_number,
+                                    freq, theta, z, rs, xs
+                                ])
             
-            self.update_progress(f"ML training dataset exported to: {earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
+            self.update_progress(f"ML training dataset exported to: {os.path.basename(output_file)}")
             
             # Ask if user wants to open the folder
             reply = QMessageBox.question(
                 self, 
                 'Dataset Exported', 
-                f'Dataset was exported as:\n{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv\n\nWould you like to open the folder?',
+                f'Dataset was exported as:\n{os.path.basename(output_file)}\n\nWould you like to open the folder?',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
                 QMessageBox.StandardButton.No
             )
