@@ -6,6 +6,18 @@
 
 ## Latest
 
+## [0.13.0] 25 Mar, 2025
+
+### Added
+
+- Added a info tab to the control panel of the GUI.
+  - This tab displays information about the application, including the version number, author, and a description of the application.
+- Prediction tab preloads the model file if there is one in the models folder.
+
+### Changed
+
+- The Progress bar moved to the status bar of the GUI.
+
 ## [0.12.0] 24 Mar, 2025
 
 ### Added

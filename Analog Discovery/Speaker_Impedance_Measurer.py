@@ -359,7 +359,31 @@ class DataCollectionApp(QMainWindow):
                 border-top: 1px solid #3d3d3d;
             }
         """)
-        self.statusBar().showMessage("Ready - Press Ctrl+S to start data collection")
+        
+        # Create progress bar in status bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setMaximumWidth(200)  # Limit width in status bar
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                padding: 1px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #58a6ff;
+                width: 10px;
+                margin: 0px;
+            }
+        """)
+        self.statusBar().addPermanentWidget(self.progress_bar)
+        
+        self.statusBar().showMessage("Ready - Press Ctrl+R to start data collection")
         
         # Load DWF library
         self.load_dwf()
@@ -373,9 +397,13 @@ class DataCollectionApp(QMainWindow):
             self.connection_status.setText("Not Connected")
             self.connection_status.setStyleSheet("color: #e74c3c; font-weight: bold;")
             
-        # Add keyboard shortcut for starting data collection (Ctrl+S)
-        self.start_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        # Add keyboard shortcuts
+        self.start_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)  # Changed from Ctrl+S to Ctrl+R
         self.start_shortcut.activated.connect(self.start_data_collection)
+        
+        # Add keyboard shortcut for saving ML dataset
+        self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.save_shortcut.activated.connect(self.export_ml_dataset)
             
         # Now that everything is initialized, refresh ports (and potentially auto-connect)
         QTimer.singleShot(100, self.refresh_ports)
@@ -521,17 +549,20 @@ class DataCollectionApp(QMainWindow):
         self.main_tab = QWidget()
         self.advanced_tab = QWidget()
         self.prediction_tab = QWidget()  # Add prediction tab
+        self.info_tab = QWidget()  # Add info tab
         
         # Create layouts for tabs
         self.main_tab_layout = QVBoxLayout(self.main_tab)
         self.main_tab_layout.setContentsMargins(0, 0, 0, 0)
         self.advanced_tab_layout = QVBoxLayout(self.advanced_tab)
         self.prediction_tab_layout = QVBoxLayout(self.prediction_tab)  # Add prediction tab layout
+        self.info_tab_layout = QVBoxLayout(self.info_tab)  # Add info tab layout
         
         # Add tabs to the tab widget
-        self.tab_widget.addTab(self.main_tab, "Main Settings")
-        self.tab_widget.addTab(self.advanced_tab, "Advanced Settings")
+        self.tab_widget.addTab(self.main_tab, "Main")
+        self.tab_widget.addTab(self.advanced_tab, "Advanced")
         self.tab_widget.addTab(self.prediction_tab, "Prediction")  # Add prediction tab
+        self.tab_widget.addTab(self.info_tab, "Info")  # Add info tab
         
         # Add tab widget to main layout
         self.input_layout.addWidget(self.tab_widget)
@@ -540,6 +571,7 @@ class DataCollectionApp(QMainWindow):
         self.create_main_tab_contents()
         self.create_advanced_tab_contents()
         self.create_prediction_tab()  # Create prediction tab contents
+        self.create_info_tab()  # Create info tab contents
 
     def create_prediction_tab(self):
         """Create the prediction tab with model loading and prediction controls"""
@@ -573,6 +605,31 @@ class DataCollectionApp(QMainWindow):
         model_file_layout.addWidget(select_model_button)
         prediction_layout.addLayout(model_file_layout)
         
+        # Try to preload model from Model folder
+        model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Model")
+        if os.path.exists(model_dir):
+            model_files = [f for f in os.listdir(model_dir) if f.endswith(('.h5', '.keras'))]
+            if model_files:
+                # Sort by modification time to get the most recent model
+                model_files.sort(key=lambda x: os.path.getmtime(os.path.join(model_dir, x)), reverse=True)
+                model_path = os.path.join(model_dir, model_files[0])
+                try:
+                    if TENSORFLOW_AVAILABLE:
+                        self.model = tf.keras.models.load_model(model_path)
+                        # Compile the model to initialize metrics
+                        self.model.compile(
+                            optimizer='adam',
+                            loss='mse',  # Mean squared error for regression
+                            metrics=['mae']  # Mean absolute error as a metric
+                        )
+                        self.model_path = model_path
+                        self.model_path_label.setText(os.path.basename(model_path))
+                        self.model_path_label.setStyleSheet("color: #2ecc71;")
+                        self.update_progress(f"Model automatically loaded: {os.path.basename(model_path)}")
+                except Exception as e:
+                    self.update_progress(f"Error loading model: {str(e)}")
+        
+        # Rest of the prediction tab setup
         # Speaker Type Selection
         type_layout = QHBoxLayout()
         type_label = QLabel("Speaker Type:")
@@ -1115,28 +1172,6 @@ class DataCollectionApp(QMainWindow):
             }
         """)
         self.input_layout.addWidget(self.progress_label)
-        
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #3d3d3d;
-                border-radius: 3px;
-                padding: 1px;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #58a6ff;
-                width: 10px;
-                margin: 0px;
-            }
-        """)
-        self.input_layout.addWidget(self.progress_bar)
         
         # Progress text area
         self.progress_text = QTextEdit()
@@ -1790,6 +1825,107 @@ class DataCollectionApp(QMainWindow):
             self.connection_status.setStyleSheet("color: #2ecc71; font-weight: bold;") # Green for connected
             
         QTimer.singleShot(2000, enable_button)
+
+    def create_info_tab(self):
+        """Create the info tab with application information and usage instructions"""
+        # Add a scroll area
+        info_scroll = QScrollArea()
+        info_scroll.setWidgetResizable(True)
+        info_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        info_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        info_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Create a container widget for the info tab content
+        info_content = QWidget()
+        info_layout = QVBoxLayout(info_content)
+        info_layout.setSpacing(15)
+        
+        # Application Title
+        title = QLabel("Speaker Impedance Measurer")
+        title.setStyleSheet("""
+            QLabel {
+                color: #58a6ff;
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+        """)
+        info_layout.addWidget(title)
+        
+        # Version and Author
+        version_info = QLabel("Version: 0.13.0\nAuthor: Max Chen")
+        version_info.setStyleSheet("font-size: 14px; color: #8b949e;")
+        info_layout.addWidget(version_info)
+        
+        # Description Section
+        description_header = QLabel("Description")
+        description_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #58a6ff; margin-top: 20px;")
+        info_layout.addWidget(description_header)
+        
+        description_text = QLabel(
+            "This application automates and speeds up earphone impedance data collection "
+            "using the Analog Discovery 2 from Digilent. It utilizes the API from the "
+            "DIGILENT WaveForms software to directly access the impedance measuring function."
+        )
+        description_text.setWordWrap(True)
+        description_text.setStyleSheet("font-size: 14px; line-height: 1.4;")
+        info_layout.addWidget(description_text)
+        
+        # Prerequisites Section
+        prereq_header = QLabel("Prerequisites")
+        prereq_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #58a6ff; margin-top: 20px;")
+        info_layout.addWidget(prereq_header)
+        
+        prereq_text = QLabel(
+            "• DIGILENT WaveForms software installed with Python API\n"
+            "• Analog Discovery 2 hardware connected\n"
+            "• Arduino (optional) for environmental data collection"
+        )
+        prereq_text.setStyleSheet("font-size: 14px; line-height: 1.4;")
+        info_layout.addWidget(prereq_text)
+        
+        # Usage Instructions Section
+        usage_header = QLabel("How to Use")
+        usage_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #58a6ff; margin-top: 20px;")
+        info_layout.addWidget(usage_header)
+        
+        usage_text = QLabel(
+            "1. Main Settings Tab:\n"
+            "   • Select earphone type and length\n"
+            "   • Set number of measurement repetitions\n"
+            "   • Monitor environmental data (if Arduino connected)\n\n"
+            "2. Advanced Settings Tab:\n"
+            "   • Configure Arduino connection\n"
+            "   • Set frequency sweep parameters\n"
+            "   • Adjust reference resistance\n\n"
+            "3. Prediction Tab:\n"
+            "   • Load a trained model\n"
+            "   • Take single measurements\n"
+            "   • Get predictions for tube length\n\n"
+            "4. Data Collection:\n"
+            "   • Press 'Start Data Collection' or use Ctrl+R\n"
+            "   • Data is saved in CSV format\n"
+            "   • Real-time plot updates during measurement"
+        )
+        usage_text.setStyleSheet("font-size: 14px; line-height: 1.4;")
+        usage_text.setWordWrap(True)
+        info_layout.addWidget(usage_text)
+        
+        # Keyboard Shortcuts Section
+        shortcuts_header = QLabel("Keyboard Shortcuts")
+        shortcuts_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #58a6ff; margin-top: 20px;")
+        info_layout.addWidget(shortcuts_header)
+        
+        shortcuts_text = QLabel("Ctrl+R: Start Data Collection\nCtrl+S: Save ML Dataset")
+        shortcuts_text.setStyleSheet("font-size: 14px; line-height: 1.4;")
+        info_layout.addWidget(shortcuts_text)
+        
+        # Add a spacer at the bottom
+        info_layout.addStretch()
+        
+        # Set the scroll area widget
+        info_scroll.setWidget(info_content)
+        self.info_tab_layout.addWidget(info_scroll)
 
 # Main function that starts the program
 if __name__ == "__main__":

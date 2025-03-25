@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Latest Version](https://img.shields.io/badge/Latest-v0.12.0-blue.svg)](CHANGELOG.md/#latest)
+[![Latest Version](https://img.shields.io/badge/Latest-v0.13.0-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.10.11-blue.svg?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-31011/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg?logo=qt&logoColor=white)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg?logo=digilent&logoColor=white)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
@@ -11,9 +11,9 @@
 This repository contains the code and data for the speaker impedance research project. The following are the main components of the project:
 
 - **Analog Discovery** - The device of choice for this project is the Analog Discovery 2. This contains Automated impedance measurement application developed using PyQt6 with the WaveForms SDK.
-   - `Speaker_Impedance_Measurer.py`: The latest GUI for automated impedance data collection.
-     - The main application also includes a prediction tab for predicting speaker tube length from impedance measurement using a trained model.
-   - Older versions of the GUI are located in the `Older` folder. The older GUI was developed using tkinter, with an identical application developed using PyQt6.
+  - `Speaker_Impedance_Measurer.py`: The latest GUI for automated impedance data collection.
+    - The main application also includes a prediction tab for predicting speaker tube length from impedance measurement using a trained model.
+  - Older versions of the GUI are located in the `Older` folder. The older GUI was developed using tkinter, with an identical application developed using PyQt6.
 
 - **Tympan** - Working with the Tympan library, this module is developed to allow the impedance measurement process to be done on a Tympan with the audio hat.
 
