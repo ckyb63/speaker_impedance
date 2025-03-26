@@ -9,6 +9,9 @@ Prerequisite:
 - DIGILENT WaveForms software installed with Python API
 """
 
+version = "0.13.1"
+author = "Max Chen"
+
 # Import necessary libraries
 import os
 import sys
@@ -148,6 +151,7 @@ class DataCollectionWorker(QThread):
     plot_signal = pyqtSignal(list, list)
     progress_bar_signal = pyqtSignal(int, int)  # Current step, total steps
     finished_signal = pyqtSignal()
+    device_error_signal = pyqtSignal()  # New signal for device errors
     
     def __init__(self, app, folder_name, repetitions, record_env_data=True):
         super().__init__()
@@ -165,6 +169,7 @@ class DataCollectionWorker(QThread):
         if hdwf.value == hdwfNone.value:
             self.app.dwf.FDwfGetLastErrorMsg(szerr)
             self.progress_signal.emit(f"Failed to open device: {str(szerr.value)}")
+            self.device_error_signal.emit()  # Emit device error signal
             return
         
         # Impedance Measurement settings from the GUI
@@ -315,6 +320,38 @@ class DataCollectionApp(QMainWindow):
         self.main_layout.setSpacing(10)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
         
+        # Create status bar
+        self.statusBar().setStyleSheet("""
+            QStatusBar {
+                background-color: #252525;
+                color: #ffffff;
+                border-top: 1px solid #3d3d3d;
+            }
+        """)
+        
+        # Create progress bar in status bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setMaximumWidth(200)  # Limit width in status bar
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                border-radius: 3px;
+                padding: 1px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #58a6ff;
+                width: 10px;
+                margin: 0px;
+            }
+        """)
+        self.statusBar().addPermanentWidget(self.progress_bar)
+        
         # Arduino monitor will be initialized when the user selects a port
         self.arduino_monitor = None
         
@@ -351,38 +388,6 @@ class DataCollectionApp(QMainWindow):
         self.export_dataset_button.setEnabled(True)
         self.input_layout.addWidget(self.export_dataset_button)
         
-        # Create status bar
-        self.statusBar().setStyleSheet("""
-            QStatusBar {
-                background-color: #252525;
-                color: #ffffff;
-                border-top: 1px solid #3d3d3d;
-            }
-        """)
-        
-        # Create progress bar in status bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setMaximumWidth(200)  # Limit width in status bar
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #3d3d3d;
-                border-radius: 3px;
-                padding: 1px;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #58a6ff;
-                width: 10px;
-                margin: 0px;
-            }
-        """)
-        self.statusBar().addPermanentWidget(self.progress_bar)
-        
         self.statusBar().showMessage("Ready - Press Ctrl+R to start data collection")
         
         # Load DWF library
@@ -390,7 +395,9 @@ class DataCollectionApp(QMainWindow):
         
         # Initialize environmental data display with default values
         self.update_environmental_data(25.0, 50.0, 1013.25, 0.0, 0.0)
-        self.update_progress("Please select a COM port and connect to Arduino")
+        
+        # Set initial status message
+        self.statusBar().showMessage("Please select a COM port and connect to Arduino")
         
         # Update the connection status text
         if hasattr(self, 'connection_status'):
@@ -757,6 +764,7 @@ class DataCollectionApp(QMainWindow):
             self.single_measurement_worker.progress_signal.connect(self.update_progress)
             self.single_measurement_worker.plot_signal.connect(self.update_plot)
             self.single_measurement_worker.finished_signal.connect(self.process_single_measurement)
+            self.single_measurement_worker.device_error_signal.connect(self.handle_device_error)  # Connect device error signal
             self.single_measurement_worker.start()
             
         except ValueError as e:
@@ -947,6 +955,21 @@ class DataCollectionApp(QMainWindow):
         repetitions_layout.addWidget(self.repetitions_entry)
         config_layout.addWidget(repetitions_widget)
         
+        # Environmental data checkbox - create a container widget and layout
+        env_checkbox_widget = QWidget()
+        env_checkbox_layout = QVBoxLayout(env_checkbox_widget)
+        env_checkbox_layout.setSpacing(3)
+        env_checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.env_data_checkbox = QCheckBox("Record Environmental Data")
+        self.env_data_checkbox.setChecked(True)  # Enable by default
+        self.env_data_checkbox.setStyleSheet("color: #ffffff;")
+        self.env_data_checkbox.setToolTip("When enabled, real-time environmental data (temperature, humidity, pressure, sound levels)\nwill be recorded for each frequency measurement point in the CSV output files.")
+        
+        env_checkbox_layout.addWidget(QLabel(""))  # Empty label for alignment
+        env_checkbox_layout.addWidget(self.env_data_checkbox)
+        config_layout.addWidget(env_checkbox_widget)
+        
         # Add the config layout to the main content layout
         self.main_content_layout.addLayout(config_layout)
         
@@ -1022,14 +1045,6 @@ class DataCollectionApp(QMainWindow):
         self.smoothed_dba_value.setAlignment(Qt.AlignmentFlag.AlignLeft)
         env_grid.addWidget(smoothed_dba_label, 4, 0)
         env_grid.addWidget(self.smoothed_dba_value, 4, 1)
-        
-        # Add checkbox for recording environmental data
-        self.env_data_checkbox = QCheckBox("Record Environmental Data")
-        self.env_data_checkbox.setChecked(True)  # Enable by default
-        self.env_data_checkbox.setStyleSheet("color: #ffffff;")
-        self.env_data_checkbox.setMinimumHeight(30)  # Minimum height
-        self.env_data_checkbox.setToolTip("When enabled, real-time environmental data (temperature, humidity, pressure, sound levels)\nwill be recorded for each frequency measurement point in the CSV output files.")
-        env_grid.addWidget(self.env_data_checkbox, 5, 0, 1, 2)  # span 2 columns
         
         self.main_content_layout.addWidget(env_group)
         
@@ -1159,20 +1174,6 @@ class DataCollectionApp(QMainWindow):
         status_header.setStyleSheet("font-weight: bold; font-size: 12px; color: #58a6ff; margin-top: 15px;")
         self.input_layout.addWidget(status_header)
 
-        # Progress label
-        self.progress_label = QLabel("Ready")
-        self.progress_label.setStyleSheet("""
-            QLabel {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #3d3d3d;
-                border-radius: 3px;
-                padding: 5px;
-                min-height: 20px;
-            }
-        """)
-        self.input_layout.addWidget(self.progress_label)
-        
         # Progress text area
         self.progress_text = QTextEdit()
         self.progress_text.setReadOnly(True)
@@ -1272,8 +1273,8 @@ class DataCollectionApp(QMainWindow):
         scrollbar = self.progress_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
         
-        # Also update the status label with the latest message
-        self.progress_label.setText(message)
+        # Update the status bar message
+        self.statusBar().showMessage(message)
 
     def update_progress_bar(self, current, total):
         """Update the progress bar"""
@@ -1414,7 +1415,6 @@ class DataCollectionApp(QMainWindow):
             self.update_progress(f"Created data folder: {folder_name}")
         
         # Update UI
-        self.progress_label.setText("Status: Running")
         self.start_button.setText("Running...")
         self.start_button.setStyleSheet("""
             QPushButton {
@@ -1449,6 +1449,7 @@ class DataCollectionApp(QMainWindow):
         self.worker.plot_signal.connect(self.update_plot)
         self.worker.progress_bar_signal.connect(self.update_progress_bar)
         self.worker.finished_signal.connect(self.collection_finished)
+        self.worker.device_error_signal.connect(self.handle_device_error)  # Connect device error signal
         self.worker.start()
         
         env_data_status = "with" if record_env_data else "without"
@@ -1456,7 +1457,6 @@ class DataCollectionApp(QMainWindow):
 
     def collection_finished(self):
         """Update UI after data collection is complete"""
-        self.progress_label.setText("Status: Complete")
         self.start_button.setText("Start Data Collection")
         self.start_button.setStyleSheet("""
             QPushButton {
@@ -1841,7 +1841,7 @@ class DataCollectionApp(QMainWindow):
         info_layout.setSpacing(15)
         
         # Application Title
-        title = QLabel("Speaker Impedance Measurer")
+        title = QLabel("Speaker Impedance Measurement Tool")
         title.setStyleSheet("""
             QLabel {
                 color: #58a6ff;
@@ -1853,7 +1853,7 @@ class DataCollectionApp(QMainWindow):
         info_layout.addWidget(title)
         
         # Version and Author
-        version_info = QLabel("Version: 0.13.0\nAuthor: Max Chen")
+        version_info = QLabel(f"Version: {version}\nAuthor: {author}")
         version_info.setStyleSheet("font-size: 14px; color: #8b949e;")
         info_layout.addWidget(version_info)
         
@@ -1926,6 +1926,91 @@ class DataCollectionApp(QMainWindow):
         # Set the scroll area widget
         info_scroll.setWidget(info_content)
         self.info_tab_layout.addWidget(info_scroll)
+
+    def handle_device_error(self):
+        """Handle device connection errors"""
+        # Set the start button to stopped state
+        self.start_button.setText("Stopped")
+        self.start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 6px;
+                border: none;
+                margin: 5px 0;
+            }
+        """)
+        self.start_button.setEnabled(True)
+        
+        # Set the measure button to stopped state if it exists
+        if hasattr(self, 'measure_button'):
+            self.measure_button.setText("Stopped")
+            self.measure_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    font-size: 14px;
+                    font-weight: bold;
+                    padding: 10px;
+                    border-radius: 6px;
+                    margin: 10px 0;
+                }
+            """)
+            self.measure_button.setEnabled(True)
+            
+        self.statusBar().showMessage("Device connection error - Please check connection")
+        
+        # Create a timer to reset the start button after 5 seconds
+        def reset_start_button():
+            self.start_button.setText("Start Data Collection")
+            self.start_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2ea043;
+                    color: white;
+                    font-size: 18px;
+                    font-weight: bold;
+                    padding: 10px;
+                    border-radius: 6px;
+                    border: none;
+                    margin: 5px 0;
+                }
+                QPushButton:hover {
+                    background-color: #3fb950;
+                }
+                QPushButton:pressed {
+                    background-color: #238636;
+                }
+                QPushButton:disabled {
+                    background-color: #444444;
+                    color: #aaaaaa;
+                }
+            """)
+            
+        # Create a timer to reset the measure button after 5 seconds
+        def reset_measure_button():
+            if hasattr(self, 'measure_button'):
+                self.measure_button.setText("Take Single Measurement")
+                self.measure_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2ea043;
+                        color: white;
+                        font-size: 14px;
+                        font-weight: bold;
+                        padding: 10px;
+                        border-radius: 6px;
+                        margin: 10px 0;
+                    }
+                    QPushButton:hover {
+                        background-color: #3fb950;
+                    }
+                """)
+        
+        # Set up the timers
+        QTimer.singleShot(5000, reset_start_button)
+        QTimer.singleShot(5000, reset_measure_button)
 
 # Main function that starts the program
 if __name__ == "__main__":

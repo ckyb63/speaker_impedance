@@ -1,10 +1,26 @@
 # Change log
 
-## Upcoming
+## Planned
 
-- The prediction tab to preload the model file from the models folder.
+- Revert and Spin off the Prediction Tab into an independent application.
+- Update the GUI to be more user friendly and informative.
+- Update the Readme file to reflect the changes; especially the screenshots.
 
 ## Latest
+
+## [0.13.1] 26 Mar, 2025
+
+### Removed
+
+- Removed the progress label from the status section, the window status bar will now be the element to display it.
+
+### Changed
+
+- Environmental Recording checkbox is moved to the configuration section.
+
+### Fixed
+
+- Fixed issue where for both of the measurement buttons, it would show "Running / Measuring" even when stopped/it is unable to.
 
 ## [0.13.0] 25 Mar, 2025
 
