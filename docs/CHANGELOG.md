@@ -1,12 +1,27 @@
 # Change log
 
-## Planned
-
-- Revert and Spin off the Prediction Tab into an independent application.
-- Update the GUI to be more user friendly and informative.
-- Update the Readme file to reflect the changes; especially the screenshots.
-
 ## Latest
+
+## [0.13.2] 26 Mar, 2025 - Disabled Prediction Tab
+
+### Removed
+
+- Prediction Tab is disabled and tensorflow is not loaded.
+  - This is becasue the prediction functionality needs to be furthur developed and tested before it can be put back into the main application.
+
+### Changed
+
+- Readme.md updated with new screenshots at this version.
+- Application window title now displays the version number along with name tweak.
+
+### Fixed
+
+- Fixed issue where the application would not show the correct status bar message when the Arduino is connected, and the message would not update.
+- Fixed duplicated Data Collection Finished message.
+
+### Note
+
+- The Icon for the application was created with a python script.
 
 ## [0.13.1] 26 Mar, 2025
 

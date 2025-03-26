@@ -1,6 +1,6 @@
 # Speaker Impedance
 
-[![Latest Version](https://img.shields.io/badge/Latest-v0.13.1-blue.svg)](CHANGELOG.md/#latest)
+[![Latest Version](https://img.shields.io/badge/Latest-v0.13.2-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.10.11-blue.svg?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-31011/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg?logo=qt&logoColor=white)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg?logo=digilent&logoColor=white)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
@@ -72,15 +72,27 @@ For more detailed updates, see the [changelog](CHANGELOG.md) for recent updates 
 ## Screenshots
 
 <details>
-  <summary>Main GUI Window - Main Settings</summary>
+  <summary>Main GUI Window - Main Tab on Application Open</summary>
 
-  ![Main GUI Window - Main Settings](./Pics/0.10.0_1.png "Main GUI Window - Main Settings")
+  ![Main GUI Window - Main Tab on Application Open](./Pics/OnOpen_0.13.2.png "Main GUI Window - Main Tab on Application Open")
 </details>
 
 <details>
-  <summary>Main GUI Window - Advanced Settings</summary>
+  <summary>Main GUI Window - Main Tab on Data Collection Finish</summary>
 
-  ![Main GUI Window - Advanced Settings](./Pics/0.10.0_2.png "Main GUI Window - Advanced Settings")
+  ![Main GUI Window - Main Tab on Data Collection Finish](./Pics/OnFinish_0.13.2.png "Main GUI Window - Main Tab on Data Collection Finish")
+</details>
+
+<details>
+  <summary>Main GUI Window - Advanced Settings Tab</summary>
+
+  ![Main GUI Window - Advanced Settings Tab](./Pics/Advanced_Tab_0.13.2.png "Main GUI Window - Advanced Settings Tab")
+</details>
+
+<details>
+  <summary>Main GUI Window - Prediction Tab</summary>
+
+  ![Main GUI Window - Prediction Tab](./Pics/Prediction_Tab_0.13.2.png "Main GUI Window - Prediction Tab")
 </details>
 
 ## Contributors

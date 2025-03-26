@@ -10,6 +10,7 @@ __pycache__
 *.json
 
 /Collected_Data_Sep16
+/Collected_Data_Mar26
 /myenv
 
 *.keras

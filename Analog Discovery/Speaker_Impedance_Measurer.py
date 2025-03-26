@@ -9,7 +9,7 @@ Prerequisite:
 - DIGILENT WaveForms software installed with Python API
 """
 
-version = "0.13.1"
+version = "0.13.2"
 author = "Max Chen"
 
 # Import necessary libraries
@@ -37,12 +37,12 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
 # TensorFlow imports for model loading and prediction
-print("Attempting to import TensorFlow...")  # Debug line
+# print("Attempting to import TensorFlow...")  # Debug line
 try:
-    import tensorflow as tf
-    print(f"Successfully imported TensorFlow version: {tf.__version__}")
-    print(f"TensorFlow is using backend: {tf.config.list_physical_devices()}")
-    TENSORFLOW_AVAILABLE = True
+    # import tensorflow as tf
+    # print(f"Successfully imported TensorFlow version: {tf.__version__}")
+    # print(f"TensorFlow is using backend: {tf.config.list_physical_devices()}")
+    TENSORFLOW_AVAILABLE = False  # Set to False since we're not using TensorFlow
 except ImportError as e:
     print(f"Failed to import TensorFlow: {str(e)}")
     print("\nDetailed error information:")
@@ -282,7 +282,7 @@ class DataCollectionWorker(QThread):
         self.app.dwf.FDwfAnalogImpedanceConfigure(hdwf, c_int(0))
         self.app.dwf.FDwfDeviceClose(hdwf)
         self.plot_signal.emit(rgHz, rgZ)
-        self.progress_signal.emit("Data collection completed.")
+        # self.progress_signal.emit("Data collection completed.")  # Remove this line
         self.progress_bar_signal.emit(100, 100)  # Ensure progress bar shows 100%
         self.finished_signal.emit()
 
@@ -290,7 +290,7 @@ class DataCollectionWorker(QThread):
 class DataCollectionApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Earphones Impedance Measurement - Analog Discovery 2")
+        self.setWindowTitle(f"Speaker Impedance Measurement - Analog Discovery 2 (v{version})")
         
         # Set the application icon
         self.setWindowIcon(QIcon("Analog Discovery/assets/speaker_icon.png"))
@@ -601,42 +601,18 @@ class DataCollectionApp(QMainWindow):
         
         # Model file selection
         model_file_layout = QHBoxLayout()
-        self.model_path_label = QLabel("No model selected")
+        self.model_path_label = QLabel("TensorFlow not available")
         self.model_path_label.setStyleSheet("color: #e74c3c;")
         
         select_model_button = QPushButton("Select Model")
         select_model_button.clicked.connect(self.select_model_file)
         select_model_button.setMaximumWidth(120)
+        select_model_button.setEnabled(False)  # Disable since TensorFlow is not available
         
         model_file_layout.addWidget(self.model_path_label)
         model_file_layout.addWidget(select_model_button)
         prediction_layout.addLayout(model_file_layout)
         
-        # Try to preload model from Model folder
-        model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Model")
-        if os.path.exists(model_dir):
-            model_files = [f for f in os.listdir(model_dir) if f.endswith(('.h5', '.keras'))]
-            if model_files:
-                # Sort by modification time to get the most recent model
-                model_files.sort(key=lambda x: os.path.getmtime(os.path.join(model_dir, x)), reverse=True)
-                model_path = os.path.join(model_dir, model_files[0])
-                try:
-                    if TENSORFLOW_AVAILABLE:
-                        self.model = tf.keras.models.load_model(model_path)
-                        # Compile the model to initialize metrics
-                        self.model.compile(
-                            optimizer='adam',
-                            loss='mse',  # Mean squared error for regression
-                            metrics=['mae']  # Mean absolute error as a metric
-                        )
-                        self.model_path = model_path
-                        self.model_path_label.setText(os.path.basename(model_path))
-                        self.model_path_label.setStyleSheet("color: #2ecc71;")
-                        self.update_progress(f"Model automatically loaded: {os.path.basename(model_path)}")
-                except Exception as e:
-                    self.update_progress(f"Error loading model: {str(e)}")
-        
-        # Rest of the prediction tab setup
         # Speaker Type Selection
         type_layout = QHBoxLayout()
         type_label = QLabel("Speaker Type:")
@@ -663,6 +639,7 @@ class DataCollectionApp(QMainWindow):
                 background-color: #3fb950;
             }
         """)
+        self.measure_button.setEnabled(False)  # Disable since TensorFlow is not available
         prediction_layout.addWidget(self.measure_button)
         
         # Prediction Results Section
@@ -671,7 +648,7 @@ class DataCollectionApp(QMainWindow):
         prediction_layout.addWidget(results_header)
         
         # Results display
-        self.prediction_result_label = QLabel("No prediction available")
+        self.prediction_result_label = QLabel("TensorFlow is not available. This feature is currently disabled.")
         self.prediction_result_label.setStyleSheet("""
             QLabel {
                 background-color: #2d2d2d;
@@ -691,145 +668,14 @@ class DataCollectionApp(QMainWindow):
         # Set the scroll area widget
         prediction_scroll.setWidget(prediction_content)
         self.prediction_tab_layout.addWidget(prediction_scroll)
-        
-        # Disable prediction features if TensorFlow is not available
-        if not TENSORFLOW_AVAILABLE:
-            self.model_path_label.setText("TensorFlow not installed")
-            self.measure_button.setEnabled(False)
-            select_model_button.setEnabled(False)
-            self.prediction_result_label.setText("Please install TensorFlow to enable predictions")
-            
+
     def select_model_file(self):
         """Open file dialog to select a model file"""
-        # Set the default directory to the 'model' folder in the same directory as the script
-        default_model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
-        if not os.path.exists(default_model_dir):
-            default_model_dir = os.path.dirname(os.path.abspath(__file__))
-            
-        file_filter = "Model Files (*.h5 *.keras);;All Files (*.*)"
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Model File",
-            default_model_dir,  # Use the default model directory
-            file_filter
-        )
-        
-        if file_path:
-            try:
-                # Load the model using TensorFlow
-                print(f"Attempting to load model from: {file_path}")  # Debug line
-                self.model = tf.keras.models.load_model(file_path)
-                print("Model loaded successfully")  # Debug line
-                self.model_path = file_path
-                self.model_path_label.setText(os.path.basename(file_path))
-                self.model_path_label.setStyleSheet("color: #2ecc71;")
-                self.update_progress(f"Model loaded successfully: {os.path.basename(file_path)}")
-            except Exception as e:
-                print(f"Error loading model: {str(e)}")  # Debug line
-                self.model = None
-                self.model_path = None
-                self.model_path_label.setText("Error loading model")
-                self.model_path_label.setStyleSheet("color: #e74c3c;")
-                self.update_progress(f"Error loading model: {str(e)}")
-                QMessageBox.critical(self, "Model Loading Error", f"Failed to load model: {str(e)}")
-                
+        QMessageBox.information(self, "Feature Disabled", "TensorFlow is not available. This feature is currently disabled.")
+
     def take_single_measurement(self):
         """Take a single measurement for prediction"""
-        if not self.model:
-            QMessageBox.warning(self, "No Model", "Please select a model file first.")
-            return
-            
-        # Get selected speaker type
-        selected_type = self.prediction_type_combo.currentText()
-        
-        try:
-            # Configure measurement parameters
-            start_freq = int(self.start_frequency_entry.text())
-            stop_freq = int(self.stop_frequency_entry.text())
-            steps = int(self.step_entry.text())
-            reference = int(self.reference_entry.text())
-            
-            # Create a worker for single measurement
-            self.measure_button.setEnabled(False)
-            self.measure_button.setText("Measuring...")
-            
-            # Create and start the worker thread
-            self.single_measurement_worker = DataCollectionWorker(
-                self,
-                f"single_measurement_{selected_type}",
-                1,  # One repetition
-                False  # Don't record environmental data for prediction
-            )
-            
-            self.single_measurement_worker.progress_signal.connect(self.update_progress)
-            self.single_measurement_worker.plot_signal.connect(self.update_plot)
-            self.single_measurement_worker.finished_signal.connect(self.process_single_measurement)
-            self.single_measurement_worker.device_error_signal.connect(self.handle_device_error)  # Connect device error signal
-            self.single_measurement_worker.start()
-            
-        except ValueError as e:
-            QMessageBox.critical(self, "Input Error", str(e))
-            self.measure_button.setEnabled(True)
-            self.measure_button.setText("Take Single Measurement")
-            
-    def process_single_measurement(self):
-        """Process the single measurement and make a prediction"""
-        try:
-            # Re-enable the measure button
-            self.measure_button.setEnabled(True)
-            self.measure_button.setText("Take Single Measurement")
-            
-            # Get the measurement data from the last saved file
-            measurement_folder = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "Collected_Data",
-                f"single_measurement_{self.prediction_type_combo.currentText()}"
-            )
-            
-            # Find the most recent CSV file
-            csv_files = [f for f in os.listdir(measurement_folder) if f.endswith('.csv')]
-            if not csv_files:
-                raise Exception("No measurement data found")
-                
-            latest_file = os.path.join(measurement_folder, sorted(csv_files)[-1])
-            
-            # Read and process the data
-            data = []
-            with open(latest_file, 'r') as f:
-                reader = csv.reader(f)
-                next(reader)  # Skip header
-                for row in reader:
-                    freq, theta, z, rs, xs = row[:5]
-                    data.append([float(z)])  # Using only impedance magnitude for now
-                    
-            # Prepare data for prediction
-            X = np.array(data)
-            
-            # Check if model is loaded
-            if not hasattr(self, 'model') or self.model is None:
-                raise Exception("No model loaded. Please select and load a model first.")
-            
-            # Make prediction using TensorFlow model
-            prediction = self.model.predict(X.reshape(1, -1), verbose=0)  # Set verbose=0 to suppress progress bar
-            
-            # Process prediction result (assuming regression model predicting length)
-            predicted_length = float(prediction[0])
-            
-            # Update the result label
-            self.prediction_result_label.setText(
-                f"Predicted Length: {predicted_length:.1f} mm\n"
-                f"Speaker Type: {self.prediction_type_combo.currentText()}"
-            )
-            self.prediction_result_label.setStyleSheet("color: #2ecc71; font-weight: bold;")
-            
-            # Update progress
-            self.update_progress(f"Prediction complete: {predicted_length:.1f} mm")
-            
-        except Exception as e:
-            self.prediction_result_label.setText(f"Prediction Error: {str(e)}")
-            self.prediction_result_label.setStyleSheet("color: #e74c3c;")
-            self.update_progress(f"Prediction error: {str(e)}")
-            QMessageBox.critical(self, "Prediction Error", f"Failed to make prediction: {str(e)}")
+        QMessageBox.information(self, "Feature Disabled", "TensorFlow is not available. This feature is currently disabled.")
 
     def create_main_tab_contents(self):
         """Create the main tab contents"""
@@ -1823,6 +1669,8 @@ class DataCollectionApp(QMainWindow):
             self.reconnect_button.setEnabled(True)
             self.connection_status.setText(f"Connected to {port}")
             self.connection_status.setStyleSheet("color: #2ecc71; font-weight: bold;") # Green for connected
+            self.update_progress(f"Successfully connected to Arduino on {port}")
+            self.statusBar().showMessage("Ready - Press Ctrl+R to start data collection")
             
         QTimer.singleShot(2000, enable_button)
 
