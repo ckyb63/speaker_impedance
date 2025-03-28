@@ -9,8 +9,13 @@ __pycache__
 *.csv
 *.json
 
+# Just Collected Data Files
 /Collected_Data_Sep16
 /Collected_Data_Mar26
+/Collected_Data_Mar27
+/ML_Dataset_326
+/ML_Dataset_327
+
 /myenv
 
 *.keras
@@ -22,10 +27,7 @@ __pycache__
 Analog Discovery/Collected_Data/
 Analog Discovery/ML_Datasets/
 
-
 .markdownlint.yaml
-
-docs/measurementsteps.md
 
 Impedance-main/
 

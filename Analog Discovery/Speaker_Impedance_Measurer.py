@@ -9,7 +9,7 @@ Prerequisite:
 - DIGILENT WaveForms software installed with Python API
 """
 
-version = "0.13.2"
+version = "0.15.0"
 author = "Max Chen"
 
 # Import necessary libraries
@@ -215,7 +215,7 @@ class DataCollectionWorker(QThread):
 
             # Opens and writes to file based on the file structure
             if self.record_env_data:
-                file_name = f"{self.folder_name}_Run{run + 1}_T{temp:.1f}C_H{humidity:.1f}pct.csv"
+                file_name = f"{self.folder_name}_Run{run + 1}_T{temp:.1f}C_H{humidity:.1f}pct_dBA{smoothed_dba:.1f}.csv"
             else:
                 file_name = f"{self.folder_name}_Run{run + 1}.csv"
                 
@@ -1253,7 +1253,7 @@ class DataCollectionApp(QMainWindow):
         if self.env_data_checkbox.isChecked() and arduino_connected:
             # Get current environmental data
             temp, humidity, pressure, raw_sound, smoothed_dba = self.arduino_monitor.get_latest_data()
-            folder_name = f"{folder_name}_T{temp:.1f}C_H{humidity:.1f}pct"
+            folder_name = f"{folder_name}_T{temp:.1f}C_H{humidity:.1f}pct_dBA{smoothed_dba:.1f}"
             
         self.base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Collected_Data", folder_name)
         if not os.path.exists(self.base_folder):
@@ -1361,9 +1361,10 @@ class DataCollectionApp(QMainWindow):
         """Export a consolidated dataset for machine learning training"""
         try:
             # Create a folder for ML datasets if it doesn't exist
-            ml_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ML_Datasets")
-            if not os.path.exists(ml_folder):
-                os.makedirs(ml_folder)
+            # Use absolute path to ensure correct location
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            ml_folder = os.path.join(script_dir, "ML_Datasets")
+            os.makedirs(ml_folder, exist_ok=True)  # Added exist_ok=True to prevent race conditions
                 
             # Extract type and length from the folder name
             folder_parts = os.path.basename(self.base_folder).split('_')
@@ -1374,11 +1375,17 @@ class DataCollectionApp(QMainWindow):
                 # Check if there's environmental data in the folder name
                 temperature_str = "N/A"
                 humidity_str = "N/A"
+                dba_str = "N/A"
                 
                 if len(folder_parts) >= 4 and folder_parts[2].startswith('T') and folder_parts[3].startswith('H'):
                     # Extract temperature and humidity from folder name
                     temperature_str = folder_parts[2][1:-1]  # Remove 'T' prefix and 'C' suffix
                     humidity_str = folder_parts[3][1:-3]     # Remove 'H' prefix and 'pct' suffix
+                    # Extract dBA value if present
+                    if len(folder_parts) >= 5 and folder_parts[4].startswith('dBA'):
+                        dba_str = folder_parts[4][3:]  # Remove 'dBA' prefix
+                        if dba_str.endswith('.csv'):
+                            dba_str = dba_str[:-4]  # Remove '.csv' suffix
             else:
                 earphone_type = "unknown"
                 earphone_length = "unknown"
@@ -1386,9 +1393,12 @@ class DataCollectionApp(QMainWindow):
             # Create the output file name based on type and length
             has_env_data = self.export_dataset_button.property("env_data") == "true"
             if has_env_data:
-                output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_All.csv")
+                output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_T{temperature_str}_H{humidity_str}_dBA{dba_str}_All.csv")
             else:
                 output_file = os.path.join(ml_folder, f"{earphone_type}_{earphone_length}_NoEnv_All.csv")
+            
+            # Create parent directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
             
             # Check if file already exists
             file_exists = os.path.exists(output_file)
@@ -1562,52 +1572,7 @@ class DataCollectionApp(QMainWindow):
             else:
                 event.ignore()
         else:
-            # Create message box with styled buttons
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle('Exit')
-            msg_box.setText('Are you sure you want to exit the application?')
-            msg_box.setIcon(QMessageBox.Icon.Question)
-            
-            # Create custom styled buttons
-            yes_button = msg_box.addButton('Yes', QMessageBox.ButtonRole.YesRole)
-            no_button = msg_box.addButton('No', QMessageBox.ButtonRole.NoRole)
-            
-            # Style the buttons
-            yes_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #e74c3c;
-                    color: white;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    border: none;
-                    min-width: 80px;
-                }
-                QPushButton:hover {
-                    background-color: #c0392b;
-                }
-            """)
-            
-            no_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #2ea043;
-                    color: white;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    border: none;
-                    min-width: 80px;
-                }
-                QPushButton:hover {
-                    background-color: #3fb950;
-                }
-            """)
-            
-            msg_box.setDefaultButton(no_button)
-            msg_box.exec()
-            
-            if msg_box.clickedButton() == yes_button:
-                event.accept()
-            else:
-                event.ignore()
+            event.accept()  # Close directly if no data collection in progress
 
     def refresh_ports(self):
         """Refresh the available COM ports list"""

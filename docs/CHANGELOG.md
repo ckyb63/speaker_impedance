@@ -2,6 +2,27 @@
 
 ## Latest
 
+## [0.15.0] 27 Mar, 2025
+
+### Added
+
+- Added dB value to the file name of the collected data, for easier identification after collection.
+
+- Added new [Matlab scripts](../matlab/plot_impedance_data_comparison.m) to plot for external sound level comparison.
+
+### Changed
+
+- Improved the Run function of the GUI.
+
+### Removed
+
+- Removed the close application popup.
+
+### Fixed
+
+- Export ML Dataset now properly names the file correctly instead in some random folder.
+- Application hanging.
+
 ## [0.13.2] 26 Mar, 2025 - Disabled Prediction Tab
 
 ### Removed
