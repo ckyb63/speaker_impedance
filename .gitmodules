@@ -1,0 +1,3 @@
+[submodule "speaker_impedance_data"]
+	path = speaker_impedance_data
+	url = https://github.com/ckyb63/speaker_impedance_data.git

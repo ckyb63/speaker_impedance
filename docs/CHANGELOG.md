@@ -2,6 +2,12 @@
 
 ## Latest
 
+## [0.15.1] 28 Mar, 2025
+
+### Changed
+
+- Changed how collected data is organized, they are now in a git submodule.
+
 ## [0.15.0] 27 Mar, 2025
 
 ### Added
