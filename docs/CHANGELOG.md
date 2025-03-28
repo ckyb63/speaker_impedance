@@ -1,12 +1,25 @@
 # Change log
 
+## Upcoming
+
+- Append Date to main collected data folder name.
+- Append Date to ML Dataset folder name.
+
 ## Latest
+
+## [0.15.2] 28 Mar, 2025
+
+### Changed/Added
+
+- [Impedance Document](../speaker_impedance_doc/README.md) added as a private submodule.
+- Misc changes to the README.md
 
 ## [0.15.1] 28 Mar, 2025
 
-### Changed
+### Changed/Added
 
-- Changed how collected data is organized, they are now in a git submodule.
+- Changed how collected data is organized.
+- [speaker_impedance_data](../speaker_impedance_data/collected_data.md) added as a private submodule.
 
 ## [0.15.0] 27 Mar, 2025
 

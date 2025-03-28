@@ -1,11 +1,11 @@
 # Speaker Impedance
 
-[![Latest Version](https://img.shields.io/badge/Latest-v0.15.1-blue.svg)](CHANGELOG.md/#latest)
+[![Latest Version](https://img.shields.io/badge/Latest-v0.15.2-blue.svg)](CHANGELOG.md/#latest)
 [![Python Version](https://img.shields.io/badge/Python-3.10.11-blue.svg?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-31011/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.8.1-blue.svg?logo=qt&logoColor=white)](https://pypi.org/project/PyQt6/)
 [![Analog Discovery](https://img.shields.io/badge/Analog%20Discovery-2.0-green.svg?logo=digilent&logoColor=white)](https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting-started?srsltid=AfmBOorRtu33lsD6IVZflrbMJIFuTLurrbm7XozjjqH9yrPqBuhSF0tu)
 [![MATLAB](https://img.shields.io/badge/MATLAB-R2024a-green.svg?logo=mathworks&logoColor=white)](https://www.mathworks.com/products/matlab.html)
-[![Status](https://img.shields.io/badge/Status-Active_Development-green.svg)](CHANGELOG.md/#latest)
+[![Status](https://img.shields.io/badge/Status-Active-green.svg)](CHANGELOG.md/#latest)
 
 ## Overview
 
@@ -96,6 +96,10 @@ For more detailed updates, see the [changelog](CHANGELOG.md) for recent updates 
   ![Main GUI Window - Prediction Tab](./Pics/Prediction_Tab_0.13.2.png "Main GUI Window - Prediction Tab")
 </details>
 
-## Contributors
+## Additional Information
 
-Max Chen
+Author: Max Chen
+
+Collected Data can be found at [speaker_impedance_data](../speaker_impedance_data/collected_data.md)
+
+Research Documentation can be found at [speaker_impedance_doc](../speaker_impedance_doc/README.md)
